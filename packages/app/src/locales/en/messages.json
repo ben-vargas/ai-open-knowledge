@@ -1227,6 +1227,9 @@
     "dw_dUJ": ["Failed to duplicate path"],
     "e0NrBM": ["Project"],
     "e1hptq": ["Embed a video with native player controls."],
+    "e6pmcJ": [
+      "What this folder is about — give it a title, description, tags, or any properties you like, just like a doc has. This describes the folder itself; it is not copied into the docs inside it. To start new docs in this folder with a ready-made set of properties, add a template instead."
+    ],
     "e8L17t": ["A non-empty folder already exists at this path. Pick a different folder."],
     "e8zRrb": ["Show Files"],
     "eBIT9h": ["Paste failed.", ["restoreSuffix"]],
