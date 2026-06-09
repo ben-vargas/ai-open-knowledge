@@ -91,6 +91,12 @@ function pathHasAlwaysSkipSegment(relativePath: string): boolean {
   return false;
 }
 
+const BUILTIN_SKIP_FILES = new Set<string>(['.DS_Store', '.localized']);
+
+function isAlwaysSkipFile(relativePath: string): boolean {
+  return BUILTIN_SKIP_FILES.has(relativePath.slice(relativePath.lastIndexOf('/') + 1));
+}
+
 function isSingleDocAncestorDir(relativeDir: string, singleDocRelPath: string): boolean {
   return singleDocRelPath === relativeDir || singleDocRelPath.startsWith(`${relativeDir}/`);
 }
@@ -386,6 +392,8 @@ export function createContentFilter(opts: ContentFilterOptions): ContentFilter {
 
       if (pathHasAlwaysSkipSegment(relativePath)) return true;
 
+      if (isAlwaysSkipFile(relativePath)) return true;
+
       if (singleDocRelPath !== undefined) return relativePath !== singleDocRelPath;
 
       if (opts?.bypassFilters) return false;
@@ -423,6 +431,7 @@ export function createContentFilter(opts: ContentFilterOptions): ContentFilter {
     isPathIgnored(relativePath: string, opts?: ContentFilterReadOpts): boolean {
       if (isReservedDocName(relativePath)) return true;
       if (pathHasAlwaysSkipSegment(relativePath)) return true;
+      if (isAlwaysSkipFile(relativePath)) return true;
       if (opts?.bypassFilters) return false;
       return isRejectedByConfigurableRules(relativePath);
     },
@@ -788,6 +797,7 @@ export async function createContentFilterAsync(opts: ContentFilterOptions): Prom
     isExcluded(relativePath: string, opts?: ContentFilterReadOpts): boolean {
       if (isReservedDocName(relativePath)) return true;
       if (pathHasAlwaysSkipSegment(relativePath)) return true;
+      if (isAlwaysSkipFile(relativePath)) return true;
       if (singleDocRelPath !== undefined) return relativePath !== singleDocRelPath;
       if (opts?.bypassFilters) return false;
       if (isRejectedByConfigurableRules(relativePath)) return true;
@@ -820,6 +830,7 @@ export async function createContentFilterAsync(opts: ContentFilterOptions): Prom
     isPathIgnored(relativePath: string, opts?: ContentFilterReadOpts): boolean {
       if (isReservedDocName(relativePath)) return true;
       if (pathHasAlwaysSkipSegment(relativePath)) return true;
+      if (isAlwaysSkipFile(relativePath)) return true;
       if (opts?.bypassFilters) return false;
       return isRejectedByConfigurableRules(relativePath);
     },

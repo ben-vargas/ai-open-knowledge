@@ -457,6 +457,16 @@ describe('ContentFilter', () => {
       expect(filter.isPathIgnored('.git/config', BYPASS)).toBe(true);
       expect(filter.isPathIgnored('node_modules/pkg/index.js', BYPASS)).toBe(true);
 
+      expect(filter.isExcluded('.DS_Store', BYPASS)).toBe(true);
+      expect(filter.isExcluded('notes/.DS_Store', BYPASS)).toBe(true);
+      expect(filter.isExcluded('a/b/c/.DS_Store', BYPASS)).toBe(true);
+      expect(filter.isExcluded('.localized', BYPASS)).toBe(true);
+      expect(filter.isExcluded('notes/.localized', BYPASS)).toBe(true);
+      expect(filter.isPathIgnored('.DS_Store', BYPASS)).toBe(true);
+      expect(filter.isPathIgnored('notes/.DS_Store', BYPASS)).toBe(true);
+      expect(filter.isExcluded('archive.DS_Store', BYPASS)).toBe(false);
+      expect(filter.isExcluded('notes/my.DS_Store.md', BYPASS)).toBe(false);
+
       expect(filter.isDirExcluded('dist', BYPASS)).toBe(false);
       expect(filter.isDirExcluded('build', BYPASS)).toBe(false);
       expect(filter.isDirExcluded('coverage', BYPASS)).toBe(false);
