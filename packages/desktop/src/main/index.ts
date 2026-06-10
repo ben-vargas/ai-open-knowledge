@@ -67,6 +67,7 @@ import {
   Menu,
   nativeImage,
   nativeTheme,
+  screen,
   session,
   shell,
   utilityProcess,
@@ -105,6 +106,7 @@ import {
   type BundleReplaceWatcherHandle,
   startBundleReplaceWatcher,
 } from './bundle-replace-detector.ts';
+import { cascadePosition } from './cascade-position.ts';
 import { checkTargetExists as checkTargetExistsImpl } from './check-target-exists.ts';
 import { requestUserConsent, walkExceedsCap } from './consent-dialog.ts';
 import {
@@ -243,6 +245,44 @@ const DEFAULT_WIN_OPTS: BrowserWindowConstructorOptions = {
     sandbox: true,
   },
 };
+
+const cascadeOrder: BrowserWindow[] = [];
+
+function pickCascadeAnchor(): BrowserWindow | null {
+  const focused = BrowserWindow.getFocusedWindow();
+  if (
+    focused &&
+    cascadeOrder.includes(focused) &&
+    !focused.isDestroyed() &&
+    !focused.isFullScreen()
+  ) {
+    return focused;
+  }
+  for (let i = cascadeOrder.length - 1; i >= 0; i--) {
+    const win = cascadeOrder[i];
+    if (win && !win.isDestroyed() && !win.isFullScreen()) return win;
+  }
+  return null;
+}
+
+function applyCascadePosition(win: BrowserWindow): void {
+  const anchor = pickCascadeAnchor();
+  if (anchor) {
+    const anchorBounds = anchor.getBounds();
+    const { width, height } = win.getBounds();
+    const pos = cascadePosition({
+      anchor: { x: anchorBounds.x, y: anchorBounds.y },
+      size: { width, height },
+      workArea: screen.getDisplayMatching(anchorBounds).workArea,
+    });
+    if (pos) win.setPosition(pos.x, pos.y);
+  }
+  cascadeOrder.push(win);
+  win.on('closed', () => {
+    const idx = cascadeOrder.indexOf(win);
+    if (idx !== -1) cascadeOrder.splice(idx, 1);
+  });
+}
 
 function probeWsUpgrade(url: string, timeoutMs: number): Promise<boolean> {
   return new Promise<boolean>((resolveProbe) => {
@@ -429,6 +469,7 @@ function ensureWindowManager() {
       win.on('page-title-updated', (e) => {
         e.preventDefault();
       });
+      applyCascadePosition(win);
       return win as unknown as BrowserWindowLike;
     },
     forkUtility: (entry, args, opts) => {

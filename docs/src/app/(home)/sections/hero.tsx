@@ -38,9 +38,9 @@ export function Hero() {
           className="items-center"
           tag="Open source"
           headingClassName="sm:text-6xl text-5xl"
-          description="A rich block editor for you, an MCP server for your agents — over the same Markdown files in git."
+          description="A rich text editor for you and your agents. Private, open source, and free."
         >
-          Knowledge you build with your agents.
+          Beautiful, AI-native markdown editor.
         </SectionHeading>
 
         <div className="mt-6">
@@ -61,7 +61,7 @@ export function Hero() {
             id="hero-agent-label"
           >
             <span className="font-mono text-sm uppercase tracking-wide text-slide-muted">
-              Works with
+              Use with
             </span>
             <div
               role="radiogroup"
