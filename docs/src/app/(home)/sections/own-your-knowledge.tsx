@@ -7,17 +7,17 @@ const features = [
   {
     icon: Laptop,
     title: 'Local-first',
-    description: 'Runs on your machine; works fully offline.',
+    description: 'Runs on your machine; private by design.',
   },
   {
     icon: GitFork,
     title: 'Open source',
-    description: 'Auditable, self-hostable, community-built.',
+    description: 'Auditable, self-hostable, & community-built.',
   },
   {
     icon: Puzzle,
     title: 'Platform-agnostic',
-    description: 'File over app. Outlives any single tool.',
+    description: 'Use with any agent and any tool.',
   },
 ];
 

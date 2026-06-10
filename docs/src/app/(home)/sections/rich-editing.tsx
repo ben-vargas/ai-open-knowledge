@@ -600,30 +600,24 @@ export function RichEditing() {
       <TemplateAnimationStyles />
       <SectionHeading
         tag="The editor"
-        description="Rich blocks and slash commands over plain Markdown that never leaves your folder. Source and WYSIWYG stay in sync."
+        description="A Notion or Google-docs editor experience that's just markdown under the hood."
         className="max-w-2xl"
       >
-        Rich editing, plain files.
+        A canvas for your knowledge.
       </SectionHeading>
 
       <div className="grid grid-cols-1 md:grid-cols-3 grid-rows-[auto_auto] gap-x-6 gap-y-5 lg:gap-x-8">
-        <FeatureCard
-          title="Block components"
-          description="Callouts, toggles, tables, code and math — all stored as clean Markdown."
-        >
+        <FeatureCard title="Rich elements" description="Tables, images, code, diagrams, and more.">
           <BlockComponents />
         </FeatureCard>
         <FeatureCard
-          title="Templates"
-          description="Start from a ready-made template, or save any page as your own."
-        >
-          <Templates />
-        </FeatureCard>
-        <FeatureCard
           title="Embeddable HTML"
-          description="Drop in live HTML and iframes right inside the doc."
+          description="Drop-in apps, previews, and visualizations."
         >
           <EmbeddableHtml />
+        </FeatureCard>
+        <FeatureCard title="Templates" description="Ready-made and customizable templates.">
+          <Templates />
         </FeatureCard>
       </div>
     </Section>

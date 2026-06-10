@@ -69,7 +69,7 @@ export function MadeForAgents() {
         <div className="flex flex-col gap-8">
           <SectionHeading
             tag="AI native"
-            description="Your knowledge base, open to the agents you already work in — editing alongside you, live."
+            description="Built-in tools for agents to co-author and understand your knowledge base."
           >
             Made for agents.
           </SectionHeading>
