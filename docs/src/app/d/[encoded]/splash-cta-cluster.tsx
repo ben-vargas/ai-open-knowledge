@@ -1,7 +1,9 @@
 'use client';
 
-import { ArrowRightIcon, DownloadIcon, ExternalLinkIcon } from 'lucide-react';
+import { ArrowUpRight } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import { cn } from '@/lib/utils';
+import { SplashButtonLabel, splashPrimaryButton } from './splash-buttons';
 
 interface SplashCtaClusterProps {
   downloadUrl: string;
@@ -92,7 +94,7 @@ export function SplashCtaCluster({
           className="mb-6 rounded-lg border border-[var(--slide-border,rgba(0,0,0,0.08))] p-4"
           data-testid="splash-reopen-prompt"
         >
-          <p className="text-sm text-[var(--slide-muted)]">
+          <p className="text-sm text-slide-muted">
             Installed Open Knowledge? Open it to land on this share.
           </p>
           <a
@@ -100,10 +102,11 @@ export function SplashCtaCluster({
             href={customSchemeUrl}
             onClick={handleOpenClick}
             data-testid="splash-reopen-cta"
-            className="slide-btn-primary mt-3 inline-flex touch-manipulation items-center gap-2 rounded-lg px-6 py-3 text-sm font-medium transition-[opacity,transform] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--slide-accent-strong)]"
+            className={cn(splashPrimaryButton, 'mt-3 touch-manipulation')}
           >
-            {attempting ? 'Opening…' : 'Open in Open Knowledge'}
-            <ArrowRightIcon className="size-4" aria-hidden="true" />
+            <SplashButtonLabel>
+              {attempting ? 'Opening…' : 'Open in Open Knowledge'}
+            </SplashButtonLabel>
           </a>
         </div>
       ) : null}
@@ -113,10 +116,11 @@ export function SplashCtaCluster({
           href={customSchemeUrl}
           onClick={handleOpenClick}
           data-testid="splash-open-cta"
-          className="slide-btn-primary inline-flex touch-manipulation items-center gap-2 rounded-lg px-6 py-3 text-sm font-medium transition-[opacity,transform] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--slide-accent-strong)]"
+          className={cn(splashPrimaryButton, 'touch-manipulation')}
         >
-          {attempting ? 'Opening…' : 'Open in Open Knowledge'}
-          <ArrowRightIcon className="size-4" aria-hidden="true" />
+          <SplashButtonLabel>
+            {attempting ? 'Opening…' : 'Open in Open Knowledge'}
+          </SplashButtonLabel>
         </a>
 
         <a
@@ -124,17 +128,17 @@ export function SplashCtaCluster({
           data-testid="splash-github-cta"
           rel="noopener noreferrer"
           target="_blank"
-          className="inline-flex touch-manipulation items-center gap-1.5 text-sm font-medium text-[var(--slide-muted)] transition-colors hover:text-[var(--slide-accent)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--slide-accent)] focus-visible:rounded"
+          className="inline-flex touch-manipulation items-center gap-1.5 font-mono text-sm uppercase tracking-wide text-slide-muted transition-colors hover:text-slide-text focus-visible:rounded focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slide-accent"
         >
           View on GitHub
-          <ExternalLinkIcon className="size-3.5" aria-hidden="true" />
+          <ArrowUpRight className="size-3.5" aria-hidden="true" />
         </a>
       </div>
 
       <div aria-live="polite">
         {handoffFailed ? (
           <div className="mt-6" data-testid="splash-handoff-fallback">
-            <p className="text-sm text-[var(--slide-muted)]">
+            <p className="text-sm text-slide-muted">
               Looks like Open Knowledge isn&rsquo;t installed yet.
             </p>
             <a
@@ -142,20 +146,21 @@ export function SplashCtaCluster({
               href={downloadUrl}
               onClick={handleDownloadClick}
               data-testid="splash-download-fallback-cta"
-              className="slide-btn-primary mt-3 inline-flex touch-manipulation items-center gap-2 rounded-lg px-6 py-3 text-sm font-medium transition-[opacity,transform] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--slide-accent-strong)]"
+              className={cn(splashPrimaryButton, 'mt-3 touch-manipulation')}
             >
-              <DownloadIcon className="size-4" aria-hidden="true" />
-              Download Open Knowledge for macOS
+              <SplashButtonLabel direction="down">
+                Download Open Knowledge for macOS
+              </SplashButtonLabel>
             </a>
           </div>
         ) : (
-          <p className="mt-4 text-sm text-[var(--slide-muted)]">
+          <p className="mt-4 text-sm text-slide-muted">
             Don&rsquo;t have the app?{' '}
             <a
               href={downloadUrl}
               onClick={handleDownloadClick}
               data-testid="splash-download-cta"
-              className="touch-manipulation font-medium text-[var(--slide-text)] underline underline-offset-4 transition-colors hover:text-[var(--slide-accent)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--slide-accent)] focus-visible:rounded"
+              className="touch-manipulation font-medium text-slide-text underline underline-offset-4 transition-colors hover:text-slide-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slide-accent focus-visible:rounded"
             >
               Download for macOS
             </a>

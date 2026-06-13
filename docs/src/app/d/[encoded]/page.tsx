@@ -1,15 +1,11 @@
-import {
-  ArrowRightIcon,
-  DownloadIcon,
-  ExternalLinkIcon,
-  FolderIcon,
-  GitBranchIcon,
-} from 'lucide-react';
+import { FolderIcon, GitBranchIcon } from 'lucide-react';
 import type { Metadata } from 'next';
-import Image from 'next/image';
 import Link from 'next/link';
+import { OkWordmark } from '@/components/ok-wordmark';
 import { buildSplashViewModel, SPLASH_DOWNLOAD_URL } from '@/lib/share-splash';
 import { SITE_URL } from '@/lib/site';
+import { DotTexture } from '../../(home)/dot-texture';
+import { SplashButtonLabel, splashOutlineButton, splashPrimaryButton } from './splash-buttons';
 import { SplashCtaCluster } from './splash-cta-cluster';
 
 export const dynamic = 'force-static';
@@ -61,26 +57,17 @@ export default async function SplashPage({ params }: SplashPageProps) {
   }
 
   return (
-    <main className="relative min-h-screen bg-[var(--slide-bg)] font-[family-name:var(--font-dm-sans)]">
-      <Image
-        src="/ok-logo.png"
-        alt=""
-        width={64}
-        height={64}
-        className="pointer-events-none absolute top-8 right-8 z-10 size-10 md:top-12 md:right-12 md:size-12"
-        aria-hidden="true"
-      />
+    <main className="relative min-h-screen overflow-hidden bg-slide-bg font-[family-name:var(--font-dm-sans)]">
+      <SplashChrome />
 
-      <section className="px-6 pt-32 pb-16 md:pt-44 md:pb-20">
+      <section className="relative z-10 px-6 pt-16 pb-16 md:pt-24 md:pb-20">
         <div className="mx-auto max-w-3xl">
-          <p className="mb-6 text-sm font-medium italic text-[var(--slide-accent-strong)]">
-            {view.target === 'folder'
-              ? 'Folder shared via Open Knowledge'
-              : 'Shared via Open Knowledge'}
+          <p className="mb-6 font-mono text-base font-medium uppercase tracking-wide text-primary">
+            {view.target === 'folder' ? 'Shared folder' : 'Shared'}
           </p>
 
           <h1
-            className="text-3xl font-light tracking-tight text-[var(--slide-text)] sm:text-4xl lg:text-[3.25rem] lg:leading-[1.1]"
+            className="text-3xl font-light tracking-tight text-slide-text sm:text-4xl lg:text-[3.25rem] lg:leading-[1.1]"
             data-testid="splash-filename"
           >
             <span className="relative inline-block break-words">
@@ -103,7 +90,7 @@ export default async function SplashPage({ params }: SplashPageProps) {
           </h1>
 
           <p
-            className="mt-8 text-lg leading-relaxed text-[var(--slide-muted)]"
+            className="mt-8 text-lg leading-relaxed text-slide-muted"
             data-testid="splash-repo-path"
           >
             {view.repoPath}
@@ -111,7 +98,7 @@ export default async function SplashPage({ params }: SplashPageProps) {
 
           {view.target === 'folder' ? (
             <p
-              className="mt-2 inline-flex items-center gap-2 text-sm text-[var(--slide-muted)]"
+              className="mt-2 inline-flex items-center gap-2 text-sm text-slide-muted"
               data-testid="splash-folder-indicator"
             >
               <FolderIcon className="size-4" aria-hidden="true" />
@@ -121,12 +108,12 @@ export default async function SplashPage({ params }: SplashPageProps) {
 
           {view.isDefaultBranch ? null : (
             <p
-              className="mt-2 inline-flex items-center gap-2 text-sm text-[var(--slide-muted)]"
+              className="mt-2 inline-flex items-center gap-2 text-sm text-slide-muted"
               data-testid="splash-branch-indicator"
             >
               <GitBranchIcon className="size-4" aria-hidden="true" />
               <span>
-                on <span className="font-medium text-[var(--slide-text)]">{view.branch}</span>
+                on <span className="font-medium text-slide-text">{view.branch}</span>
               </span>
             </p>
           )}
@@ -142,48 +129,52 @@ export default async function SplashPage({ params }: SplashPageProps) {
   );
 }
 
+function SplashChrome() {
+  return (
+    <>
+      <DotTexture
+        variant="right"
+        priority
+        className="top-0 right-0 w-60 dark:opacity-30 sm:w-[680px]"
+      />
+      <DotTexture
+        variant="left"
+        className="bottom-0 left-0 w-40 dark:opacity-30 sm:w-72 lg:w-[515px]"
+      />
+      <header className="relative z-10">
+        <div className="container mx-auto flex px-6 pt-8 md:pt-10">
+          <Link href="/" aria-label="Open Knowledge home" className="inline-flex items-center">
+            {/* Link already names the control; hide the wordmark's own label to
+                avoid a doubled "Open Knowledge" announcement. */}
+            <OkWordmark aria-hidden="true" className="h-8 w-auto text-slide-text" />
+          </Link>
+        </div>
+      </header>
+    </>
+  );
+}
+
 function SplashFallback({ heading }: { heading: string }) {
   return (
-    <main className="relative min-h-screen bg-[var(--slide-bg)] font-[family-name:var(--font-dm-sans)]">
-      <Image
-        src="/ok-logo.png"
-        alt=""
-        width={64}
-        height={64}
-        className="pointer-events-none absolute top-8 right-8 z-10 size-10 md:top-12 md:right-12 md:size-12"
-        aria-hidden="true"
-      />
+    <main className="relative min-h-screen overflow-hidden bg-slide-bg font-[family-name:var(--font-dm-sans)]">
+      <SplashChrome />
 
-      <section className="px-6 pt-32 pb-16 md:pt-44 md:pb-20">
+      <section className="relative z-10 px-6 pt-16 pb-16 md:pt-24 md:pb-20">
         <div className="mx-auto max-w-3xl">
-          <h1 className="text-3xl font-light tracking-tight text-[var(--slide-text)] sm:text-4xl">
+          <h1 className="text-3xl font-light tracking-tight text-slide-text sm:text-4xl">
             {heading}
           </h1>
-          <p className="mt-6 text-lg leading-relaxed text-[var(--slide-muted)]">
-            Head to Open Knowledge to learn more.
-          </p>
 
           <div className="mt-10 flex flex-wrap items-center gap-4">
-            <Link
-              href="/"
-              className="slide-btn-outline inline-flex items-center gap-2 rounded-lg px-6 py-3 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--slide-accent)]"
-            >
-              <ArrowRightIcon className="size-4" aria-hidden="true" />
-              Visit Open Knowledge
-            </Link>
-            <a
-              href={SPLASH_DOWNLOAD_URL}
-              className="slide-btn-primary inline-flex items-center gap-2 rounded-lg px-6 py-3 text-sm font-medium transition-opacity focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--slide-accent-strong)]"
-            >
-              <DownloadIcon className="size-4" aria-hidden="true" />
-              Download for macOS
+            <a href={SPLASH_DOWNLOAD_URL} className={splashPrimaryButton}>
+              <SplashButtonLabel direction="down">Download for macOS</SplashButtonLabel>
             </a>
+            <Link href="/" className={splashOutlineButton}>
+              <SplashButtonLabel iconStyle="plain">Learn more</SplashButtonLabel>
+            </Link>
           </div>
 
-          <p className="mt-8 inline-flex items-center gap-2 text-sm text-[var(--slide-muted)]">
-            <ExternalLinkIcon className="size-4" aria-hidden="true" />
-            Share URLs are only opened on macOS in v1.
-          </p>
+          <p className="mt-8 text-sm text-slide-muted">Share URLs are only opened on macOS.</p>
         </div>
       </section>
     </main>
