@@ -4,7 +4,7 @@ import type { Processor } from 'unified';
 
 const MICROMARK_EXT = mdx();
 const FROM_MARKDOWN_EXT = mdxFromMarkdown();
-const TO_MARKDOWN_EXT = mdxToMarkdown();
+export const TO_MARKDOWN_EXT = mdxToMarkdown();
 
 export function remarkMdxAgnostic(this: Processor): void {
   const data = this.data();

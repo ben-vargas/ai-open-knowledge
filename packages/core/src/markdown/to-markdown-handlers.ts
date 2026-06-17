@@ -1,8 +1,9 @@
 import type { Nodes, Parents } from 'mdast';
 import type { MdxJsxAttribute, MdxJsxExpressionAttribute, MdxJsxFlowElement } from 'mdast-util-mdx';
-import type { Info, State } from 'mdast-util-to-markdown';
+import type { Handle, Info, State } from 'mdast-util-to-markdown';
 import { classifyCharacter } from 'micromark-util-classify-character';
 import { isValidSourceLiteralRaw } from '../extensions/source-literal-mark.ts';
+import { TO_MARKDOWN_EXT } from './remark-mdx-agnostic.ts';
 
 declare module 'mdast-util-to-markdown' {
   interface ConstructNameMap {
@@ -29,6 +30,19 @@ type MdastToMarkdownHandlers = {
 const inlineMathHandler = Object.assign(serializeInlineMath, { peek: () => '$' });
 
 const deleteHandler = Object.assign(serializeDelete, { peek: () => '~' });
+
+const upstreamMdxJsxFlowHandler: Handle = (() => {
+  for (const ext of TO_MARKDOWN_EXT.extensions ?? []) {
+    const handler = ext?.handlers?.mdxJsxFlowElement;
+    if (typeof handler === 'function') return handler;
+  }
+  throw new Error(
+    'mdast-util-mdx-jsx mdxJsxFlowElement to-markdown handler not found — the ' +
+      'dirty MDX JSX serialize path cannot bind. Likely a breaking change in ' +
+      'mdast-util-mdx-jsx (pinned in the root overrides); re-run the ' +
+      'markdown-pipeline upgrade protocol (test:fidelity).',
+  );
+})();
 
 export const toMarkdownHandlers = {
   text(node, _parent, state, info) {
@@ -519,7 +533,7 @@ export const toMarkdownHandlers = {
     return lines.join('\n');
   },
 
-  mdxJsxFlowElement(node, _parent, state, info) {
+  mdxJsxFlowElement(node, parent, state, info) {
     const mdxNode = node as unknown as MdxJsxFlowElement;
     const raw = mdxNode.data?.sourceRaw;
     if (typeof raw === 'string') return raw;
@@ -542,16 +556,11 @@ export const toMarkdownHandlers = {
       return attrs ? `<${name} ${attrs} />` : `<${name} />`;
     }
 
-    const openTag = attrs ? `<${name} ${attrs}>` : `<${name}>`;
-    const closeTag = `</${name}>`;
-
-    const childContent = state.containerFlow(
-      // biome-ignore lint/suspicious/noExplicitAny: safe cast for synthetic root
-      { type: 'root', children: mdxNode.children } as any,
-      info,
-    );
-
-    return `${openTag}\n\n${childContent}\n\n${closeTag}`;
+    const delegated: MdxJsxFlowElement = {
+      ...mdxNode,
+      attributes: (mdxNode.attributes ?? []).map(normalizeAttrForUpstream),
+    };
+    return upstreamMdxJsxFlowHandler(delegated, parent, state, info);
   },
 
   mark(node, _parent, state, info) {
@@ -671,8 +680,7 @@ function serializeMdxJsxAttrs(attrs: Array<MdxJsxAttribute | MdxJsxExpressionAtt
     }
     if (typeof attr.value === 'string') {
       if (attr.value.includes('"')) {
-        const escaped = attr.value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-        parts.push(`${name}={"${escaped}"}`);
+        parts.push(`${name}={${quotedAttrExpressionValue(attr.value)}}`);
       } else {
         parts.push(`${name}="${attr.value}"`);
       }
@@ -681,6 +689,30 @@ function serializeMdxJsxAttrs(attrs: Array<MdxJsxAttribute | MdxJsxExpressionAtt
     parts.push(`${name}={${attr.value.value}}`);
   }
   return parts.join(' ');
+}
+
+function quotedAttrExpressionValue(value: string): string {
+  return `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
+}
+
+function normalizeAttrForUpstream(
+  attr: MdxJsxAttribute | MdxJsxExpressionAttribute,
+): MdxJsxAttribute | MdxJsxExpressionAttribute {
+  if (
+    attr.type === 'mdxJsxAttribute' &&
+    typeof attr.value === 'string' &&
+    attr.value.includes('"')
+  ) {
+    return {
+      type: 'mdxJsxAttribute',
+      name: attr.name,
+      value: {
+        type: 'mdxJsxAttributeValueExpression',
+        value: quotedAttrExpressionValue(attr.value),
+      },
+    };
+  }
+  return attr;
 }
 
 function emitLinkTitle(
