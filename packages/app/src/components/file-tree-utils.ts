@@ -80,6 +80,22 @@ export function toFileEntries(entries: readonly DocumentListEntry[]): FileEntry[
           referencedBy: entry.referencedBy,
         });
         break;
+      case 'file': {
+        if (entry.path === undefined) {
+          dropped += 1;
+          break;
+        }
+        mapped.push({
+          kind: 'asset',
+          path: entry.path,
+          assetExt: entry.assetExt ?? synthesizeFileAssetExt(entry.path),
+          mediaKind: null,
+          size: entry.size,
+          modified: entry.modified,
+          referencedBy: [],
+        });
+        break;
+      }
       case 'folder':
         if (entry.path === undefined) {
           dropped += 1;
@@ -105,6 +121,16 @@ export function toFileEntries(entries: readonly DocumentListEntry[]): FileEntry[
     );
   }
   return mapped;
+}
+
+function synthesizeFileAssetExt(path: string): string {
+  const basename = path.includes('/') ? (path.split('/').pop() ?? path) : path;
+  const dotIndex = basename.lastIndexOf('.');
+  if (dotIndex > 0 && dotIndex < basename.length - 1) {
+    return basename.slice(dotIndex + 1).toLowerCase();
+  }
+  if (basename.startsWith('.') && basename.length > 1) return basename.slice(1).toLowerCase();
+  return 'file';
 }
 
 export function computeAncestors(docName: string | null): string[] {

@@ -916,7 +916,7 @@ describe('file-watcher ContentFilter refcount hooks', () => {
     );
 
     const kinds = collected.map((e) => e.kind).sort();
-    expect(kinds).toEqual(['asset-create', 'create']);
+    expect(kinds).toEqual(['asset-create', 'create', 'file-create']);
     const asset = collected.find((e) => e.kind === 'asset-create');
     expect(asset?.kind).toBe('asset-create');
     if (asset?.kind === 'asset-create') {
@@ -954,7 +954,7 @@ describe('file-watcher ContentFilter refcount hooks', () => {
     );
 
     const kinds = collected.map((e) => e.kind).sort();
-    expect(kinds).toEqual(['asset-create', 'create']);
+    expect(kinds).toEqual(['asset-create', 'create', 'file-create']);
     const asset = collected.find((e) => e.kind === 'asset-create');
     if (asset?.kind === 'asset-create') {
       expect(asset.relativePath).toBe('canvas-test/board.base');

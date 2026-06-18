@@ -172,7 +172,9 @@ describe('createServer boot — flag-ON semantic search (factory glue)', () => {
     expect(rotation?.signals.vector ?? 0).toBeGreaterThan(0.3);
 
     expect(result?.results?.find((r) => r.path === 'archive/old-secrets')).toBeUndefined();
-    expect(result?.results?.find((r) => r.path.startsWith('.cursor/'))).toBeUndefined();
+    const hiddenHit = result?.results?.find((r) => r.path.startsWith('.cursor/'));
+    expect(hiddenHit, 'hidden dot-path is searchable').toBeDefined();
+    expect(hiddenHit?.signals.vector, 'but a hidden dot-path is never embedded').toBeUndefined();
 
     expect(existsSync(join(tmpDir, '.ok', 'local', 'embeddings'))).toBe(true);
   }, 30_000);
@@ -206,7 +208,7 @@ describe('createServer boot — flag-ON semantic search (factory glue)', () => {
     });
     for (const r of results ?? []) expect('vector' in r.signals).toBe(false);
     expect(results?.find((r) => r.path === 'guides/credential-rotation')).toBeUndefined();
-    expect(results?.find((r) => r.path.startsWith('.cursor/'))).toBeUndefined();
+    expect(results?.find((r) => r.path.startsWith('.cursor/'))).toBeDefined();
     expect(semantic).toBeUndefined();
   });
 

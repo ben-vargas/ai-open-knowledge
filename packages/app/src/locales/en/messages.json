@@ -23,7 +23,13 @@
     "-gdcIo": ["Auto-sync is on — your commits push and remote changes pull on intervals."],
     "-i7ik4": ["Collapse burst ", ["burstNumber"], " diff"],
     "-lCAuQ": ["Loading graph"],
+    "-q4abP": [
+      "Results capped — this workspace has more files than search can index. A missing file may be a cap artifact, not a typo."
+    ],
     "-slrNR": ["Toggle a task list."],
+    "-wePNM": [
+      "Search matches file names, paths, and folders. Open a file to search its body (⌘F)."
+    ],
     "0-31GV": ["Removing"],
     "02P3hL": ["Upload failed: ", ["message"]],
     "04RA0-": ["Failed to enable sync — ", ["detail"]],
@@ -466,6 +472,7 @@
     "DPfwMq": ["Done"],
     "DVh_Tb": ["Failed to clean up after trash"],
     "D_WKe_": ["Click an agent's avatar in the presence bar to view their session."],
+    "DbILZA": ["No matches. Some files are excluded from search (hidden or ignored files)."],
     "DeDYLr": ["Unrecognized wiki link"],
     "DhLHEb": ["Failed to load activity"],
     "DiFKSL": ["Counting markdown files"],

@@ -110,9 +110,15 @@ describe('/api/documents sidebar asset rows', () => {
       referencedBy: ['docs/guide'],
     });
 
-    expect(body.documents.some((entry) => entry.path === 'docs/media/unreferenced.png')).toBe(
-      false,
+    const unreferenced = body.documents.find(
+      (entry) => entry.path === 'docs/media/unreferenced.png',
     );
+    expect(unreferenced).toMatchObject({
+      kind: 'file',
+      docName: 'docs/media/unreferenced.png',
+      assetExt: 'png',
+    });
+
     expect(body.documents.some((entry) => entry.path === 'https://example.com/remote.png')).toBe(
       false,
     );

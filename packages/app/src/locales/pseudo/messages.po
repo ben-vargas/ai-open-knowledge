@@ -3623,6 +3623,10 @@ msgid "No location selected. Use Browse to choose a folder."
 msgstr ""
 
 #: src/components/CommandPalette.tsx
+msgid "No matches. Some files are excluded from search (hidden or ignored files)."
+msgstr ""
+
+#: src/components/CommandPalette.tsx
 msgid "No matching commands."
 msgstr ""
 
@@ -4712,6 +4716,10 @@ msgstr ""
 msgid "Restore with remote changes"
 msgstr ""
 
+#: src/components/CommandPalette.tsx
+msgid "Results capped — this workspace has more files than search can index. A missing file may be a cap artifact, not a typo."
+msgstr ""
+
 #: src/components/ActivityModeContent.tsx
 #: src/components/ConnectingBanner.tsx
 #: src/components/PublishToGitHubDialog.tsx
@@ -4866,6 +4874,10 @@ msgstr ""
 
 #: src/components/CommandPalette.tsx
 msgid "Search files, folders, or commands"
+msgstr ""
+
+#: src/components/CommandPalette.tsx
+msgid "Search matches file names, paths, and folders. Open a file to search its body (⌘F)."
 msgstr ""
 
 #: src/components/ProjectSwitcher.tsx

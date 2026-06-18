@@ -350,6 +350,7 @@ import {
 import { extractActorIdentity } from './extract-actor-identity.ts';
 import {
   contentHash,
+  type DiskEvent,
   type FileIndexEntry,
   type FolderIndexEntry,
   registerWrite,
@@ -531,6 +532,16 @@ function agentWriteContentDivergenceCounter(): ReturnType<
     },
   );
   return _agentWriteContentDivergenceCounter;
+}
+
+let _searchCorpusTruncatedCounter: ReturnType<ReturnType<typeof getMeter>['createCounter']> | null =
+  null;
+function searchCorpusTruncatedCounter(): ReturnType<ReturnType<typeof getMeter>['createCounter']> {
+  _searchCorpusTruncatedCounter ||= getMeter().createCounter('ok.search.corpus_truncated_total', {
+    description:
+      'Count of search-corpus rebuilds where the name-only file tier hit OK_SEARCH_MAX_ENTRIES and dropped deepest-tail paths. One increment per truncated build; non-truncated builds do not increment.',
+  });
+  return _searchCorpusTruncatedCounter;
 }
 
 type DivergenceHandler = 'agent-write-md' | 'agent-patch' | 'rollback';
@@ -862,6 +873,14 @@ export function getShowAllMaxEntries(): number {
   if (raw === undefined) return DEFAULT_SHOWALL_MAX_ENTRIES;
   const parsed = Number(raw);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : DEFAULT_SHOWALL_MAX_ENTRIES;
+}
+
+export const DEFAULT_SEARCH_MAX_ENTRIES = 50_000;
+export function getSearchMaxEntries(): number {
+  const raw = process.env.OK_SEARCH_MAX_ENTRIES;
+  if (raw === undefined) return DEFAULT_SEARCH_MAX_ENTRIES;
+  const parsed = Number(raw);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : DEFAULT_SEARCH_MAX_ENTRIES;
 }
 
 let showAllWalkInvocations = 0;
@@ -1555,6 +1574,9 @@ export interface ApiExtensionOptions {
   ephemeral?: boolean;
   serverInstanceId: string;
   getFileIndex: () => ReadonlyMap<string, FileIndexEntry>;
+  getAllFilesIndex?: () => ReadonlyMap<string, FileIndexEntry>;
+  getFileIndexGeneration?: () => number;
+  mutateFileIndex?: (event: DiskEvent) => void;
   getFolderIndex?: () => ReadonlyMap<string, FolderIndexEntry>;
   onReferencedAssetsCacheInvalidator?: (invalidate: () => void) => void;
   getAliasMap?: () => ReadonlyMap<string, string>;
@@ -1594,7 +1616,8 @@ export interface ApiExtensionOptions {
 interface WorkspaceSearchCacheEntry {
   fingerprint: string;
   corpus?: WorkspaceSearchCorpus;
-  pending?: Promise<WorkspaceSearchCorpus>;
+  truncated?: boolean;
+  pending?: Promise<{ corpus: WorkspaceSearchCorpus; truncated: boolean }>;
 }
 
 const workspaceSearchCaches = new Map<string, WorkspaceSearchCacheEntry>();
@@ -1626,6 +1649,16 @@ export function isSafeDocName(docName: string): boolean {
   );
 }
 
+function applyDiskEventToLiveAllFilesIndex(
+  event: DiskEvent,
+  getAllFilesIndex: () => ReadonlyMap<string, FileIndexEntry>,
+): void {
+  const live = getAllFilesIndex();
+  if (live instanceof Map) {
+    updateFileIndex(event, live);
+  }
+}
+
 export function createApiExtension(options: ApiExtensionOptions): Extension {
   const {
     hocuspocus,
@@ -1633,6 +1666,10 @@ export function createApiExtension(options: ApiExtensionOptions): Extension {
     contentDir,
     serverInstanceId,
     getFileIndex,
+    getAllFilesIndex = getFileIndex,
+    mutateFileIndex = (event: DiskEvent) =>
+      applyDiskEventToLiveAllFilesIndex(event, getAllFilesIndex),
+    getFileIndexGeneration,
     getFolderIndex,
     onReferencedAssetsCacheInvalidator,
     getAliasMap,
@@ -2133,13 +2170,7 @@ export function createApiExtension(options: ApiExtensionOptions): Extension {
     registerWrite(filePath, contentHash(markdown));
     setReconciledBase(docName, markdown);
 
-    const fileIndex = getFileIndex();
-    if (fileIndex instanceof Map) {
-      updateFileIndex(
-        { kind: 'update', path: filePath, docName, content: markdown },
-        fileIndex as Map<string, FileIndexEntry>,
-      );
-    }
+    mutateFileIndex?.({ kind: 'update', path: filePath, docName, content: markdown });
   }
 
   function applyManagedRenameMapToLoadedDocument(
@@ -2830,20 +2861,14 @@ export function createApiExtension(options: ApiExtensionOptions): Extension {
               );
               setReconciledBase(toDocName, renamedSource.markdown);
 
-              const fileIndex = getFileIndex();
-              if (fileIndex instanceof Map) {
-                updateFileIndex(
-                  {
-                    kind: 'rename',
-                    oldPath: sourcePath,
-                    newPath: destinationPath,
-                    oldDocName: fromDocName,
-                    newDocName: toDocName,
-                    content: renamedSource.markdown,
-                  },
-                  fileIndex as Map<string, FileIndexEntry>,
-                );
-              }
+              mutateFileIndex?.({
+                kind: 'rename',
+                oldPath: sourcePath,
+                newPath: destinationPath,
+                oldDocName: fromDocName,
+                newDocName: toDocName,
+                content: renamedSource.markdown,
+              });
 
               backlinkIndex.renameDocument(fromDocName, toDocName, renamedSource.markdown);
               if (renamedSource.rewrites > 0) {
@@ -3927,6 +3952,7 @@ export function createApiExtension(options: ApiExtensionOptions): Extension {
         }
 
         const index = getFileIndex();
+        const allFiles = getAllFilesIndex();
         const folderIndex = getFolderIndex?.() ?? new Map<string, FolderIndexEntry>();
         const documents: DocumentListEntry[] = [];
 
@@ -3942,38 +3968,6 @@ export function createApiExtension(options: ApiExtensionOptions): Extension {
             canonicalDocName: null,
             targetPath: null,
           });
-        }
-
-        for (const [docName, entry] of index) {
-          if (dir && !docName.startsWith(`${dir}/`) && docName !== dir) continue;
-
-          const docExt = getDocExtension(docName);
-
-          documents.push({
-            kind: 'document',
-            docName,
-            docExt,
-            size: entry.size,
-            modified: entry.modified,
-            isSymlink: false,
-            canonicalDocName: null,
-            targetPath: null,
-          });
-
-          for (const alias of entry.aliases) {
-            if (dir && !alias.startsWith(`${dir}/`) && alias !== dir) continue;
-            const targetRelPath = relative(contentDir, entry.canonicalPath);
-            documents.push({
-              kind: 'document',
-              docName: alias,
-              docExt,
-              size: entry.size,
-              modified: entry.modified,
-              isSymlink: true,
-              canonicalDocName: docName,
-              targetPath: targetRelPath,
-            });
-          }
         }
 
         let assets: ReturnType<typeof collectReferencedAssets> = [];
@@ -4001,8 +3995,11 @@ export function createApiExtension(options: ApiExtensionOptions): Extension {
           referencedAssetsCache = null;
           console.warn('[document-list] asset collection failed; returning documents only:', err);
         }
+
+        const assetPaths = new Set<string>();
         for (const asset of assets) {
           if (dir && !asset.path.startsWith(`${dir}/`) && asset.path !== dir) continue;
+          assetPaths.add(asset.path);
           documents.push({
             kind: 'asset',
             docName: asset.path,
@@ -4017,6 +4014,76 @@ export function createApiExtension(options: ApiExtensionOptions): Extension {
             canonicalDocName: null,
             targetPath: null,
           });
+        }
+
+        for (const [docName, entry] of allFiles) {
+          if (entry.kind === 'markdown') {
+            if (dir && !docName.startsWith(`${dir}/`) && docName !== dir) continue;
+
+            const docExt = getDocExtension(docName);
+
+            documents.push({
+              kind: 'document',
+              docName,
+              docExt,
+              size: entry.size,
+              modified: entry.modified,
+              isSymlink: false,
+              canonicalDocName: null,
+              targetPath: null,
+            });
+
+            for (const alias of entry.aliases) {
+              if (dir && !alias.startsWith(`${dir}/`) && alias !== dir) continue;
+              const targetRelPath = relative(contentDir, entry.canonicalPath);
+              documents.push({
+                kind: 'document',
+                docName: alias,
+                docExt,
+                size: entry.size,
+                modified: entry.modified,
+                isSymlink: true,
+                canonicalDocName: docName,
+                targetPath: targetRelPath,
+              });
+            }
+            continue;
+          }
+
+          const passesDir = !dir || docName === dir || docName.startsWith(`${dir}/`);
+          if (passesDir && !assetPaths.has(docName)) {
+            const assetExt = synthesizeShowAllAssetExt(docName);
+            documents.push({
+              kind: 'file',
+              docName,
+              path: docName,
+              docExt: `.${assetExt}`,
+              assetExt,
+              size: entry.size,
+              modified: entry.modified,
+              isSymlink: false,
+              canonicalDocName: null,
+              targetPath: null,
+            });
+          }
+          for (const alias of entry.aliases) {
+            const aliasPassesDir = !dir || alias === dir || alias.startsWith(`${dir}/`);
+            if (!aliasPassesDir || assetPaths.has(alias)) continue;
+            const targetRelPath = relative(contentDir, entry.canonicalPath);
+            const assetExt = synthesizeShowAllAssetExt(alias);
+            documents.push({
+              kind: 'file',
+              docName: alias,
+              path: alias,
+              docExt: `.${assetExt}`,
+              assetExt,
+              size: entry.size,
+              modified: entry.modified,
+              isSymlink: true,
+              canonicalDocName: docName,
+              targetPath: targetRelPath,
+            });
+          }
         }
 
         documents.sort((a, b) => {
@@ -6359,13 +6426,7 @@ export function createApiExtension(options: ApiExtensionOptions): Extension {
             );
           }
         }
-        const fileIndex = typeof getFileIndex === 'function' ? getFileIndex() : null;
-        if (fileIndex instanceof Map) {
-          updateFileIndex(
-            { kind: 'create', path: fullPath, docName, content: initialContent },
-            fileIndex as Map<string, FileIndexEntry>,
-          );
-        }
+        mutateFileIndex?.({ kind: 'create', path: fullPath, docName, content: initialContent });
         if (backlinkIndex) {
           backlinkIndex.updateDocumentFromMarkdown(docName, initialContent);
           void backlinkIndex.saveToDisk().catch((err) => {
@@ -6565,7 +6626,6 @@ export function createApiExtension(options: ApiExtensionOptions): Extension {
           }
         }
 
-        const fileIndex = typeof getFileIndex === 'function' ? getFileIndex() : null;
         let duplicatedPath: string;
         let duplicatedDocNames: string[] = [];
 
@@ -6633,12 +6693,12 @@ export function createApiExtension(options: ApiExtensionOptions): Extension {
               didIncrementMdDir = true;
             }
             registerWrite(destinationPath, contentHash(content));
-            if (fileIndex instanceof Map) {
-              updateFileIndex(
-                { kind: 'create', path: destinationPath, docName: duplicatedPath, content },
-                fileIndex as Map<string, FileIndexEntry>,
-              );
-            }
+            mutateFileIndex?.({
+              kind: 'create',
+              path: destinationPath,
+              docName: duplicatedPath,
+              content,
+            });
             backlinkIndex?.updateDocumentFromMarkdown(duplicatedPath, content);
             duplicatedDocNames = [duplicatedPath];
           } catch (err) {
@@ -6654,12 +6714,11 @@ export function createApiExtension(options: ApiExtensionOptions): Extension {
             if (contentFilter && didIncrementMdDir) {
               contentFilter.decrementMdDir(dirname(duplicatedPath));
             }
-            if (fileIndex instanceof Map) {
-              updateFileIndex(
-                { kind: 'delete', path: destinationPath, docName: duplicatedPath },
-                fileIndex as Map<string, FileIndexEntry>,
-              );
-            }
+            mutateFileIndex?.({
+              kind: 'delete',
+              path: destinationPath,
+              docName: duplicatedPath,
+            });
             throw err;
           }
         } else {
@@ -6709,17 +6768,12 @@ export function createApiExtension(options: ApiExtensionOptions): Extension {
                 contentFilter.incrementMdDir(dirname(doc.docName));
               }
               registerWrite(doc.fullPath, contentHash(doc.content));
-              if (fileIndex instanceof Map) {
-                updateFileIndex(
-                  {
-                    kind: 'create',
-                    path: doc.fullPath,
-                    docName: doc.docName,
-                    content: doc.content,
-                  },
-                  fileIndex as Map<string, FileIndexEntry>,
-                );
-              }
+              mutateFileIndex?.({
+                kind: 'create',
+                path: doc.fullPath,
+                docName: doc.docName,
+                content: doc.content,
+              });
               backlinkIndex?.updateDocumentFromMarkdown(doc.docName, doc.content);
             }
           } catch (err) {
@@ -7270,18 +7324,12 @@ export function createApiExtension(options: ApiExtensionOptions): Extension {
         }
         invalidateReferencedAssetsCache();
 
-        const fileIndex = getFileIndex();
-        if (fileIndex instanceof Map) {
-          for (const docName of deletedDocNames) {
-            updateFileIndex(
-              {
-                kind: 'delete',
-                path: resolve(contentDir, `${docName}${getDocExtension(docName)}`),
-                docName,
-              },
-              fileIndex as Map<string, FileIndexEntry>,
-            );
-          }
+        for (const docName of deletedDocNames) {
+          mutateFileIndex?.({
+            kind: 'delete',
+            path: resolve(contentDir, `${docName}${getDocExtension(docName)}`),
+            docName,
+          });
         }
 
         signalChannel?.('files');
@@ -7406,18 +7454,12 @@ export function createApiExtension(options: ApiExtensionOptions): Extension {
               }
             }
 
-            const fileIndex = getFileIndex();
-            if (fileIndex instanceof Map) {
-              for (const docName of deletedDocNames) {
-                updateFileIndex(
-                  {
-                    kind: 'delete',
-                    path: resolve(contentDir, `${docName}${getDocExtension(docName)}`),
-                    docName,
-                  },
-                  fileIndex as Map<string, FileIndexEntry>,
-                );
-              }
+            for (const docName of deletedDocNames) {
+              mutateFileIndex?.({
+                kind: 'delete',
+                path: resolve(contentDir, `${docName}${getDocExtension(docName)}`),
+                docName,
+              });
             }
             if (kind === 'folder') {
               removeFolderIndexEntries(path);
@@ -9932,7 +9974,7 @@ export function createApiExtension(options: ApiExtensionOptions): Extension {
     if (!rawScopes) return undefined;
     const scopes = rawScopes.filter(
       (scope): scope is WorkspaceSearchScope =>
-        scope === 'page' || scope === 'folder' || scope === 'content',
+        scope === 'page' || scope === 'folder' || scope === 'content' || scope === 'file',
     );
     return scopes.length > 0 ? scopes : undefined;
   }
@@ -9962,18 +10004,19 @@ export function createApiExtension(options: ApiExtensionOptions): Extension {
     semanticParam: boolean | undefined,
     corpus: WorkspaceSearchCorpus,
   ): Promise<SemanticResolution> {
-    const pageTotal = corpus.documents.reduce((n, d) => n + (d.kind === 'page' ? 1 : 0), 0);
+    const embeddableDocs = corpus.documents.filter((d) => !isHiddenDocName(d.path));
+    const pageTotal = embeddableDocs.reduce((n, d) => n + (d.kind === 'page' ? 1 : 0), 0);
     if (!semanticSearch?.isEnabled() || semanticParam !== true) {
       return { queryEmbedMs: null, pageTotal, capable: false };
     }
 
-    void semanticSearch.embedCorpus(corpus.documents);
+    void semanticSearch.embedCorpus(embeddableDocs);
 
     let input: WorkspaceSemanticInput | undefined;
     let queryEmbedMs: number | null = null;
     if (intent === 'full_text' && query.trim().length >= SEMANTIC_MIN_QUERY_LENGTH) {
       const startedAt = performance.now();
-      const scores = await semanticSearch.queryScores(query, corpus.documents);
+      const scores = await semanticSearch.queryScores(query, embeddableDocs);
       queryEmbedMs = performance.now() - startedAt;
       if (scores && scores.size > 0) {
         const similarityFloor = getSemanticSimilarityFloor?.();
@@ -10028,7 +10071,7 @@ export function createApiExtension(options: ApiExtensionOptions): Extension {
     source: SearchSource;
   }): Promise<SearchSuccess> {
     const startedAt = performance.now();
-    const corpus = await getWorkspaceSearchCorpus();
+    const { corpus, truncated } = await getWorkspaceSearchCorpus();
     const semantic = await resolveSemantic(
       params.query,
       params.intent,
@@ -10075,13 +10118,29 @@ export function createApiExtension(options: ApiExtensionOptions): Extension {
       results: entries,
       elapsedMs: Math.max(0, performance.now() - startedAt),
       ...(semanticStatus ? { semantic: semanticStatus } : {}),
+      ...(truncated ? { truncated: true } : {}),
     };
   }
 
-  async function buildWorkspaceSearchDocumentsFromIndex(): Promise<WorkspaceSearchDocument[]> {
+  async function buildWorkspaceSearchDocumentsFromIndex(): Promise<{
+    documents: WorkspaceSearchDocument[];
+    truncated: boolean;
+  }> {
     const pages: WorkspaceSearchDocument[] = [];
-    for (const [docName, entry] of getFileIndex()) {
-      if (isSystemDoc(docName) || isConfigDoc(docName) || isHiddenDocName(docName)) continue;
+    const files: WorkspaceSearchDocument[] = [];
+    for (const [docName, entry] of getAllFilesIndex()) {
+      if (isSystemDoc(docName) || isConfigDoc(docName)) continue;
+      if (entry.kind === 'file') {
+        files.push(
+          createWorkspaceSearchDocument({
+            kind: 'file',
+            path: docName,
+            modifiedTs: Date.parse(entry.modified),
+            aliases: entry.aliases,
+          }),
+        );
+        continue;
+      }
       let content = '';
       let title = docName;
       try {
@@ -10097,17 +10156,46 @@ export function createApiExtension(options: ApiExtensionOptions): Extension {
           title,
           content,
           modifiedTs: Date.parse(entry.modified),
+          aliases: entry.aliases,
         }),
       );
     }
-    return [...pages, ...deriveFolderSearchDocuments(pages)];
+    const maxFiles = getSearchMaxEntries();
+    let admittedFiles = files;
+    let truncated = false;
+    if (files.length > maxFiles) {
+      truncated = true;
+      admittedFiles = [...files]
+        .sort((a, b) => {
+          const depthA = a.path.split('/').length;
+          const depthB = b.path.split('/').length;
+          return depthA - depthB || a.path.localeCompare(b.path);
+        })
+        .slice(0, maxFiles);
+      getLogger('search').warn(
+        {
+          dropped: files.length - admittedFiles.length,
+          retained: admittedFiles.length,
+          limit: maxFiles,
+        },
+        '[search] corpus name-only file tier truncated at OK_SEARCH_MAX_ENTRIES',
+      );
+      searchCorpusTruncatedCounter().add(1);
+    }
+    const documents = [
+      ...pages,
+      ...admittedFiles,
+      ...deriveFolderSearchDocuments([...pages, ...admittedFiles]),
+    ];
+    return { documents, truncated };
   }
 
   function workspaceSearchFingerprint(): string {
-    return [...getFileIndex()]
-      .filter(
-        ([docName]) => !isSystemDoc(docName) && !isConfigDoc(docName) && !isHiddenDocName(docName),
-      )
+    if (getFileIndexGeneration) {
+      return `gen:${getFileIndexGeneration()}`;
+    }
+    return [...getAllFilesIndex()]
+      .filter(([docName]) => !isSystemDoc(docName) && !isConfigDoc(docName))
       .sort(([a], [b]) => a.localeCompare(b))
       .map(
         ([docName, entry]) =>
@@ -10116,27 +10204,38 @@ export function createApiExtension(options: ApiExtensionOptions): Extension {
       .join('');
   }
 
-  async function getWorkspaceSearchCorpus(): Promise<WorkspaceSearchCorpus> {
+  async function getWorkspaceSearchCorpus(): Promise<{
+    corpus: WorkspaceSearchCorpus;
+    truncated: boolean;
+  }> {
     const cacheKey = `${contentDir} ${projectDir ?? ''}`;
     const fingerprint = workspaceSearchFingerprint();
     const workspaceSearchCache = workspaceSearchCaches.get(cacheKey);
     if (workspaceSearchCache?.fingerprint === fingerprint && workspaceSearchCache.corpus) {
-      return workspaceSearchCache.corpus;
+      return {
+        corpus: workspaceSearchCache.corpus,
+        truncated: workspaceSearchCache.truncated ?? false,
+      };
     }
     if (workspaceSearchCache?.fingerprint === fingerprint && workspaceSearchCache.pending) {
       return workspaceSearchCache.pending;
     }
 
-    const pending = buildWorkspaceSearchDocumentsFromIndex().then((documents) =>
-      createWorkspaceSearchCorpus(documents),
-    );
+    const pending = buildWorkspaceSearchDocumentsFromIndex().then(({ documents, truncated }) => ({
+      corpus: createWorkspaceSearchCorpus(documents),
+      truncated,
+    }));
     workspaceSearchCaches.set(cacheKey, { fingerprint, pending });
     try {
-      const corpus = await pending;
+      const result = await pending;
       if (workspaceSearchCaches.get(cacheKey)?.pending === pending) {
-        workspaceSearchCaches.set(cacheKey, { fingerprint, corpus });
+        workspaceSearchCaches.set(cacheKey, {
+          fingerprint,
+          corpus: result.corpus,
+          truncated: result.truncated,
+        });
       }
-      return corpus;
+      return result;
     } catch (err) {
       if (workspaceSearchCaches.get(cacheKey)?.pending === pending) {
         workspaceSearchCaches.delete(cacheKey);

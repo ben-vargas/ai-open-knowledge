@@ -79,11 +79,10 @@ export const InternalLink = LinkFidelity.extend<InternalLinkOptions>({
         }
         const cache = getPageListCache();
         if (cache === null) return false;
-        if (
-          cache.assetPaths !== undefined &&
-          !isResolvedAssetHref(url, docName, cache.assetPaths)
-        ) {
-          return false;
+        if (cache.assetPaths !== undefined || cache.filePaths !== undefined) {
+          if (!isResolvedAssetHref(url, docName, cache.assetPaths, cache.filePaths)) {
+            return false;
+          }
         }
         activateAssetLink({
           url,

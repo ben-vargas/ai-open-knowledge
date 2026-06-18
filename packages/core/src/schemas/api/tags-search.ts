@@ -158,7 +158,7 @@ export const SearchRequestSchema = z
   .object({
     query: z.string().optional(),
     intent: z.enum(['autocomplete', 'full_text', 'omnibar']).optional(),
-    scopes: z.array(z.enum(['page', 'folder', 'content'])).optional(),
+    scopes: z.array(z.enum(['page', 'folder', 'content', 'file'])).optional(),
     scope: z.string().optional(),
     limit: z.number().int().nonnegative().optional(),
     semantic: z.boolean().optional(),
@@ -171,7 +171,7 @@ export type SearchSource = NonNullable<SearchRequest['source']>;
 
 export const SearchResultEntrySchema = z
   .object({
-    kind: z.enum(['page', 'folder', 'content']),
+    kind: z.enum(['page', 'folder', 'content', 'file']),
     path: z.string().min(1),
     title: z.string(),
     score: z.number(),
@@ -214,6 +214,7 @@ export const SearchSuccessSchema = z
     results: z.array(SearchResultEntrySchema),
     elapsedMs: z.number().nonnegative(),
     semantic: SearchSemanticStatusSchema.optional(),
+    truncated: z.boolean().optional(),
   })
   .loose() satisfies StandardSchemaV1;
 export type SearchSuccess = z.infer<typeof SearchSuccessSchema>;

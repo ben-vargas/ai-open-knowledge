@@ -38,6 +38,7 @@ import {
 } from '@/components/command-palette-recents';
 import {
   buildWorkspaceEntries,
+  classifyOmnibarSearchHint,
   fetchWorkspaceSearchEntries,
   matchesCommandQuery,
   SEMANTIC_RESULT_LIMIT,
@@ -155,6 +156,40 @@ function NavigationItem({
   );
 }
 
+function SearchHint({
+  mode,
+  inExclusiveMode,
+  paletteModeKind,
+}: {
+  mode: ReturnType<typeof classifyOmnibarSearchHint>;
+  inExclusiveMode: boolean;
+  paletteModeKind: 'normal' | 'tag-list' | 'tag-docs';
+}) {
+  if (inExclusiveMode) return null;
+  if (paletteModeKind !== 'normal') return null;
+  if (mode === 'idle' || mode === 'content') return null;
+  return (
+    <div
+      aria-live="polite"
+      data-testid={`command-palette-search-hint-${mode}`}
+      className="border-t px-3 py-2 text-muted-foreground text-xs"
+    >
+      {mode === 'name-only' ? (
+        <Trans>
+          Search matches file names, paths, and folders. Open a file to search its body (⌘F).
+        </Trans>
+      ) : mode === 'truncated' ? (
+        <Trans>
+          Results capped — this workspace has more files than search can index. A missing file may
+          be a cap artifact, not a typo.
+        </Trans>
+      ) : (
+        <Trans>No matches. Some files are excluded from search (hidden or ignored files).</Trans>
+      )}
+    </div>
+  );
+}
+
 function HighlightedText({ text, query }: { text: string; query: string }) {
   const segments = splitTextByQueryMatches(text, query);
   return (
@@ -197,6 +232,7 @@ export function CommandPalette({ bridge = null, open, onOpenChange }: CommandPal
   const [searchStatus, setSearchStatus] = useState<'idle' | 'loading' | 'success' | 'error'>(
     'idle',
   );
+  const [searchTruncated, setSearchTruncated] = useState(false);
   const [isSemanticMode, setIsSemanticMode] = useState(false);
   const [semanticResults, setSemanticResults] = useState<WorkspaceSearchEntry[]>([]);
   const [semanticFiredQuery, setSemanticFiredQuery] = useState<string | null>(null);
@@ -222,7 +258,7 @@ export function CommandPalette({ bridge = null, open, onOpenChange }: CommandPal
   const semanticAbortRef = useRef<AbortController | null>(null);
   const semanticTimerRef = useRef<number | null>(null);
   const { activeDocName, activeTarget } = useDocumentContext();
-  const { pages, pageTitles, pageMeta, folderPaths } = usePageList();
+  const { pages, pageTitles, pageMeta, folderPaths, filePaths } = usePageList();
   const workspace = useWorkspace();
   const { states: installStates, refresh: refreshInstallStates } = useInstalledAgents();
   const { dispatch: dispatchHandoff } = useHandoffDispatch();
@@ -243,7 +279,13 @@ export function CommandPalette({ bridge = null, open, onOpenChange }: CommandPal
   }, [open, isSemanticMode, semanticIndexing]);
   const handoffInput = buildHandoffInput({ docName: activeDocName, workspace });
 
-  const workspaceEntries = buildWorkspaceEntries(pages, folderPaths, pageTitles, pageMeta);
+  const workspaceEntries = buildWorkspaceEntries(
+    pages,
+    folderPaths,
+    pageTitles,
+    pageMeta,
+    filePaths,
+  );
   const validRecentKeys = new Set(
     workspaceEntries.map((entry) => makeOmnibarRecentKey(entry.kind, entry.path)),
   );
@@ -380,6 +422,7 @@ export function CommandPalette({ bridge = null, open, onOpenChange }: CommandPal
     if (!open || !trimmedDeferredQuery || inExclusiveMode) {
       setSearchResults([]);
       setSearchStatus('idle');
+      setSearchTruncated(false);
       return;
     }
 
@@ -391,12 +434,14 @@ export function CommandPalette({ bridge = null, open, onOpenChange }: CommandPal
       controller.abort();
       setSearchResults([]);
       setSearchStatus('error');
+      setSearchTruncated(false);
     }, COMMAND_PALETTE_SEARCH_TIMEOUT_MS);
 
     void fetchWorkspaceSearchEntries(trimmedDeferredQuery, { signal: controller.signal })
-      .then((results) => {
+      .then(({ entries, truncated }) => {
         window.clearTimeout(timeout);
-        setSearchResults(results);
+        setSearchResults(entries);
+        setSearchTruncated(truncated);
         setSearchStatus('success');
       })
       .catch((error: unknown) => {
@@ -404,6 +449,7 @@ export function CommandPalette({ bridge = null, open, onOpenChange }: CommandPal
         if (error instanceof Error && error.name === 'AbortError' && !timedOut) return;
         setSearchResults([]);
         setSearchStatus('error');
+        setSearchTruncated(false);
       });
 
     return () => {
@@ -584,9 +630,9 @@ export function CommandPalette({ bridge = null, open, onOpenChange }: CommandPal
       semantic: true,
       limit: SEMANTIC_RESULT_LIMIT,
     })
-      .then((results) => {
+      .then(({ entries }) => {
         clearThisFire(timeout, controller);
-        setSemanticResults(results);
+        setSemanticResults(entries);
         setSemanticFiredQuery(q);
         setSemanticStatus('success');
       })
@@ -1184,6 +1230,20 @@ export function CommandPalette({ bridge = null, open, onOpenChange }: CommandPal
             </CommandGroup>
           ) : null}
         </CommandList>
+
+        {/* Search-hint affordance, rendered OUTSIDE `<CommandList>` (which
+            cmdk gives `role="listbox"`; only option/group children are
+            valid there) but still INSIDE `CommandDialog` so it shares the
+            dialog's framing. Absent when at least one server hit carries a
+            body snippet. The empty-query branch (`'idle'`) renders nothing
+            so the Recents view is unaffected. */}
+        <SearchHint
+          mode={classifyOmnibarSearchHint(trimmedDeferredQuery, visibleSearchResults, {
+            truncated: searchTruncated,
+          })}
+          inExclusiveMode={inExclusiveMode}
+          paletteModeKind={paletteMode.kind}
+        />
       </CommandDialog>
 
       <NewItemDialog

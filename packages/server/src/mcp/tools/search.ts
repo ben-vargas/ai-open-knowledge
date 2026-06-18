@@ -17,16 +17,18 @@ import {
 } from './shared.ts';
 
 export const DESCRIPTION = [
-  '[Requires: Hocuspocus server] Ranked page retrieval for a query (title boost + body BM25 + recency — the cmd-K engine). For literal search across every line, use `exec` (`grep`) instead.',
+  '[Requires: Hocuspocus server] Ranked retrieval across ALL non-ignored files (markdown by title/body, other file types by name/path, plus folders) — pair with `exec` `grep` for exhaustive content search. The cmd-K engine (title boost + body BM25 + recency).',
+  '',
+  'NAMES/paths are indexed for all files; BODY content for markdown only. Two-tier agent model: run this fast indexed `search` (all files by name/path + markdown content) IN PARALLEL with `exec` (`grep`) for exhaustive literal-string content search across every file — instant ranked hits plus full content coverage. Reach for `exec` grep when you need to match content inside code/config/data files.',
   '',
   'When semantic search is enabled for the workspace (an opt-in setting with an API key), an embeddings signal is additionally fused into `full_text` ranking, surfacing conceptually-related pages that share no keywords. This tool opts in by default; the `semantic` block in the response reports coverage. Note: with semantic enabled, the query and matching page content are sent to the configured embeddings provider (content egress). Set `semantic: false` to force pure-lexical ranking for a call.',
   '',
-  'Returns scored page (and folder, with `omnibar` intent) hits, each with a body snippet and a `signals` breakdown (lexical / fullText / recency / vector). `exec`-grep covers every occurrence and needs no server.',
+  'Returns scored `page`, `folder`, and name-only `file` hits, each with a `signals` breakdown (lexical / fullText / recency / vector); markdown `page` hits also carry a body snippet (`file` hits never do — name-only). `exec`-grep covers every content occurrence and needs no server.',
   '',
   '**Parameters:**',
   '- `query` — Free-form; tokenized across title, name, path segments, and (with `full_text`) body.',
   '- `intent` (optional) — `omnibar` searches title/path/folders only (fast); `full_text` includes body. Default `full_text`.',
-  '- `scopes` (optional) — Result scope: `page` | `folder` | `content`. Defaults derive from `intent`.',
+  '- `scopes` (optional) — Result scope: `page` | `folder` | `file` | `content`. Defaults derive from `intent`.',
   '- `limit` (optional) — Max rows; default 20, max 100.',
   '- `semantic` (optional) — Set `false` to force pure-lexical ranking even when semantic search is enabled. Omit to use semantic when available.',
   '',
@@ -39,7 +41,7 @@ interface SearchDeps {
   serverUrl: ServerUrlOrResolver;
 }
 
-const SCOPE_VALUES = ['page', 'folder', 'content'] as const;
+const SCOPE_VALUES = ['page', 'folder', 'content', 'file'] as const;
 const INTENT_VALUES = ['omnibar', 'full_text'] as const;
 
 const InputSchema = {
@@ -54,7 +56,7 @@ const InputSchema = {
     .array(z.enum(SCOPE_VALUES))
     .optional()
     .describe(
-      "Override the default scope set. Members: 'page', 'folder', 'content'. Defaults derive from intent.",
+      "Override the default scope set. Members: 'page', 'folder', 'file', 'content'. Defaults derive from intent.",
     ),
   limit: z.number().int().min(1).max(100).optional().describe('Max rows; default 20, max 100.'),
   semantic: z
@@ -67,7 +69,7 @@ const InputSchema = {
 } as const;
 
 const SearchResultRowSchema = z.object({
-  kind: z.enum(['page', 'folder']),
+  kind: z.enum(['page', 'folder', 'file']),
   path: z.string(),
   docName: z.string(),
   title: z.string().nullable(),
@@ -99,7 +101,7 @@ const OutputSchema = outputSchemaWithText({
   semantic: SearchSemanticStatusSchema.optional(),
 });
 
-type SearchKind = 'page' | 'folder';
+type SearchKind = 'page' | 'folder' | 'file';
 
 interface SearchApiRow {
   kind?: SearchKind;
@@ -156,7 +158,7 @@ interface SearchStructuredResult {
 }
 
 function isSearchKind(value: unknown): value is SearchKind {
-  return value === 'page' || value === 'folder';
+  return value === 'page' || value === 'folder' || value === 'file';
 }
 
 function normalizeSignals(signals: SearchApiRow['signals']): {
