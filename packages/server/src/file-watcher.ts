@@ -46,7 +46,26 @@ type FolderDiskEvent =
   | { kind: 'folder-create'; path: string; relativePath: string }
   | { kind: 'folder-delete'; path: string; relativePath: string };
 
-export type DiskEvent = MarkdownDiskEvent | AssetDiskEvent | FolderDiskEvent;
+type FileDiskEvent =
+  | {
+      kind: 'file-create';
+      path: string;
+      relativePath: string;
+      size: number;
+      modifiedTs: number;
+      inode: number;
+    }
+  | {
+      kind: 'file-update';
+      path: string;
+      relativePath: string;
+      size: number;
+      modifiedTs: number;
+      inode: number;
+    }
+  | { kind: 'file-delete'; path: string; relativePath: string };
+
+export type DiskEvent = MarkdownDiskEvent | AssetDiskEvent | FolderDiskEvent | FileDiskEvent;
 
 export function assertNeverDiskEvent(event: never): never {
   throw new Error(`[DiskEvent] unhandled variant: ${JSON.stringify(event)}`);
@@ -58,6 +77,7 @@ export interface FileIndexEntry {
   canonicalPath: string;
   inode: number;
   aliases: string[];
+  kind: 'markdown' | 'file';
 }
 
 export interface FolderIndexEntry {
@@ -67,11 +87,24 @@ export interface FolderIndexEntry {
   inode: number;
 }
 
+function markdownIndexView(
+  inner: ReadonlyMap<string, FileIndexEntry>,
+): ReadonlyMap<string, FileIndexEntry> {
+  const snapshot = new Map<string, FileIndexEntry>();
+  for (const [k, v] of inner) {
+    if (v.kind === 'markdown') snapshot.set(k, v);
+  }
+  return snapshot;
+}
+
 export interface WatcherHandle {
   unsubscribe: () => Promise<void>;
   getFileIndex: () => ReadonlyMap<string, FileIndexEntry>;
+  getAllFilesIndex: () => ReadonlyMap<string, FileIndexEntry>;
+  getFileIndexGeneration: () => number;
   getFolderIndex: () => ReadonlyMap<string, FolderIndexEntry>;
   getAliasMap: () => ReadonlyMap<string, string>;
+  mutateFileIndex: (event: DiskEvent) => void;
   pruneFileIndexNowExcluded: () => number;
   pruneFolderIndexNowExcluded: () => number;
   rescanFromDisk: () => Promise<void>;
@@ -505,6 +538,7 @@ async function seedLastKnownHashes(
                 canonicalPath: canonical,
                 inode: canonStat.ino,
                 aliases: [aliasDocName],
+                kind: 'markdown',
               });
             } catch (err) {
               const code = (err as NodeJS.ErrnoException).code;
@@ -512,6 +546,21 @@ async function seedLastKnownHashes(
                 console.warn(`[file-watcher] Failed to seed hash for ${canonical}:`, err);
               }
             }
+          } else if (canonStat.isFile()) {
+            if (contentFilter) {
+              const relPath = relative(contentDir, canonical);
+              if (contentFilter.isPathIgnored(relPath)) continue;
+            }
+            const docName = pathToDocName(fullPath, contentDir);
+            if (isSystemDoc(docName) || isConfigDoc(docName)) continue;
+            fileIndex.set(docName, {
+              size: canonStat.size,
+              modified: canonStat.mtime.toISOString(),
+              canonicalPath: canonical,
+              inode: canonStat.ino,
+              aliases: [],
+              kind: 'file',
+            });
           }
         } catch (e) {
           console.warn(`[file-watcher] Failed to stat symlink target ${canonical}:`, e);
@@ -560,6 +609,7 @@ async function seedLastKnownHashes(
             canonicalPath: fullPath,
             inode: lst.ino,
             aliases: [],
+            kind: 'markdown',
           });
         } catch (err) {
           const code = (err as NodeJS.ErrnoException).code;
@@ -571,6 +621,24 @@ async function seedLastKnownHashes(
             console.warn(`[file-watcher] Failed to seed hash for ${fullPath}:`, err);
           }
         }
+      } else if (lst.isFile()) {
+        if (visited.has(lst.ino)) continue;
+        visited.add(lst.ino);
+
+        if (contentFilter) {
+          const relPath = relative(contentDir, fullPath);
+          if (contentFilter.isPathIgnored(relPath)) continue;
+        }
+        const docName = pathToDocName(fullPath, contentDir);
+        if (isSystemDoc(docName) || isConfigDoc(docName)) continue;
+        fileIndex.set(docName, {
+          size: lst.size,
+          modified: lst.mtime.toISOString(),
+          canonicalPath: fullPath,
+          inode: lst.ino,
+          aliases: [],
+          kind: 'file',
+        });
       }
     }
   } catch (err) {
@@ -590,6 +658,32 @@ export function updateFileIndex(event: DiskEvent, fileIndex: Map<string, FileInd
   ) {
     return;
   }
+  if (
+    event.kind === 'file-create' ||
+    event.kind === 'file-update' ||
+    event.kind === 'file-delete'
+  ) {
+    const docName = event.relativePath;
+    if (isSystemDoc(docName) || isConfigDoc(docName)) return;
+    if (event.kind === 'file-delete') {
+      const existing = fileIndex.get(docName);
+      if (existing && existing.kind === 'file') {
+        fileIndex.delete(docName);
+      }
+      return;
+    }
+    const existing = fileIndex.get(docName);
+    if (existing && existing.kind === 'markdown') return;
+    fileIndex.set(docName, {
+      size: event.size,
+      modified: new Date(event.modifiedTs).toISOString(),
+      canonicalPath: existing?.canonicalPath ?? event.path,
+      inode: event.inode || existing?.inode || 0,
+      aliases: existing?.aliases ?? [],
+      kind: 'file',
+    });
+    return;
+  }
   const docName = event.kind === 'rename' ? event.newDocName : event.docName;
   if (isSystemDoc(docName) || isConfigDoc(docName)) return;
   switch (event.kind) {
@@ -606,6 +700,7 @@ export function updateFileIndex(event: DiskEvent, fileIndex: Map<string, FileInd
         canonicalPath: existing?.canonicalPath ?? event.path,
         inode: existing?.inode ?? 0,
         aliases: existing?.aliases ?? [],
+        kind: 'markdown',
       });
       break;
     }
@@ -636,6 +731,7 @@ export function updateFileIndex(event: DiskEvent, fileIndex: Map<string, FileInd
         canonicalPath: existing?.canonicalPath ?? event.newPath,
         inode: existing?.inode ?? 0,
         aliases: existing?.aliases ?? [],
+        kind: 'markdown',
       });
       break;
     }
@@ -777,13 +873,21 @@ export async function handleRawEvents(
   const assetEvents = safeEvents.filter((e) =>
     isSupportedAssetFile(e.path, LINKABLE_ASSET_EXTENSIONS),
   );
+  const nonMdRawEvents = safeEvents.filter((e) => !isSupportedDocFile(e.path));
   const folderEvents = updateFolderIndexFromRawEvents(
     safeEvents,
     contentDir,
     contentFilter,
     folderIndex,
   );
-  if (mdEvents.length === 0 && assetEvents.length === 0 && folderEvents.length === 0) return;
+  if (
+    mdEvents.length === 0 &&
+    assetEvents.length === 0 &&
+    folderEvents.length === 0 &&
+    nonMdRawEvents.length === 0
+  ) {
+    return;
+  }
 
   const diskEvents =
     mdEvents.length > 0 ? await classifyEvents(mdEvents, contentDir, contentFilter, aliasMap) : [];
@@ -909,6 +1013,53 @@ export async function handleRawEvents(
         : { kind: 'asset-create', path: raw.path, relativePath };
     await onDiskEvent(event);
   }
+
+  for (const raw of nonMdRawEvents) {
+    const relativePath = relative(contentDir, raw.path);
+    if (contentFilter?.isPathIgnored(relativePath)) continue;
+    if (isSystemDoc(relativePath) || isConfigDoc(relativePath)) continue;
+
+    if (raw.type === 'delete') {
+      const event: DiskEvent = { kind: 'file-delete', path: raw.path, relativePath };
+      updateFileIndex(event, fileIndex);
+      await onDiskEvent(event);
+      continue;
+    }
+
+    let st: ReturnType<typeof lstatSync>;
+    try {
+      st = lstatSync(raw.path);
+      if (st.isSymbolicLink()) st = statSync(raw.path);
+    } catch (e) {
+      const code = (e as NodeJS.ErrnoException).code;
+      if (code !== 'ENOENT') {
+        console.warn(`[file-watcher] file-event lstat failed for ${raw.path} (${code})`);
+      }
+      continue;
+    }
+    if (!st.isFile()) continue;
+
+    const event: DiskEvent =
+      raw.type === 'create'
+        ? {
+            kind: 'file-create',
+            path: raw.path,
+            relativePath,
+            size: st.size,
+            modifiedTs: st.mtime.getTime(),
+            inode: Number(st.ino),
+          }
+        : {
+            kind: 'file-update',
+            path: raw.path,
+            relativePath,
+            size: st.size,
+            modifiedTs: st.mtime.getTime(),
+            inode: Number(st.ino),
+          };
+    updateFileIndex(event, fileIndex);
+    await onDiskEvent(event);
+  }
 }
 
 let _fwEventsCounterCache: ReturnType<ReturnType<typeof getMeter>['createCounter']> | null = null;
@@ -926,6 +1077,7 @@ async function startParcelWatcher(
   folderIndex: Map<string, FolderIndexEntry>,
   onDiskEvent: (event: DiskEvent) => Promise<void>,
   aliasMap: Map<string, string>,
+  onAfterMutation: () => void,
 ): Promise<AsyncSubscription | null> {
   let parcel: typeof import('@parcel/watcher');
   try {
@@ -960,6 +1112,7 @@ async function startParcelWatcher(
             onDiskEvent,
             aliasMap,
           );
+          onAfterMutation();
         } catch (handleErr) {
           console.error('[file-watcher] parcel batch error:', handleErr);
         }
@@ -981,6 +1134,7 @@ async function startChokidarWatcher(
   folderIndex: Map<string, FolderIndexEntry>,
   onDiskEvent: (event: DiskEvent) => Promise<void>,
   aliasMap: Map<string, string>,
+  onAfterMutation: () => void,
 ): Promise<AsyncSubscription> {
   const { watch } = await import('chokidar');
 
@@ -1017,7 +1171,9 @@ async function startChokidarWatcher(
         folderIndex,
         onDiskEvent,
         aliasMap,
-      ).catch((err) => console.error('[file-watcher] chokidar batch error:', err));
+      )
+        .then(onAfterMutation)
+        .catch((err) => console.error('[file-watcher] chokidar batch error:', err));
     }, BATCH_WINDOW_MS);
   }
 
@@ -1055,6 +1211,13 @@ export async function startWatcher(
   const folderIndex = new Map<string, FolderIndexEntry>();
   const aliasMap = new Map<string, string>();
 
+  let fileIndexGeneration = 0;
+  let cachedMarkdownView: ReadonlyMap<string, FileIndexEntry> | null = null;
+  let cachedMarkdownViewGeneration = -1;
+  const bumpFileIndexGeneration = (): void => {
+    fileIndexGeneration++;
+  };
+
   await seedLastKnownHashes(
     contentDir,
     contentDir,
@@ -1063,6 +1226,7 @@ export async function startWatcher(
     folderIndex,
     aliasMap,
   );
+  bumpFileIndexGeneration();
 
   const evictionInterval = setInterval(evictStaleTrackerEntries, WRITE_TRACKER_TTL_MS);
 
@@ -1076,6 +1240,7 @@ export async function startWatcher(
       folderIndex,
       onDiskEvent,
       aliasMap,
+      bumpFileIndexGeneration,
     );
     if (parcelSub) {
       subscription = parcelSub;
@@ -1088,6 +1253,7 @@ export async function startWatcher(
         folderIndex,
         onDiskEvent,
         aliasMap,
+        bumpFileIndexGeneration,
       );
       backend = 'chokidar';
     }
@@ -1108,7 +1274,18 @@ export async function startWatcher(
       return originalUnsubscribe();
     },
     getFileIndex() {
+      if (cachedMarkdownView && cachedMarkdownViewGeneration === fileIndexGeneration) {
+        return cachedMarkdownView;
+      }
+      cachedMarkdownView = markdownIndexView(fileIndex);
+      cachedMarkdownViewGeneration = fileIndexGeneration;
+      return cachedMarkdownView;
+    },
+    getAllFilesIndex() {
       return fileIndex;
+    },
+    getFileIndexGeneration() {
+      return fileIndexGeneration;
     },
     getFolderIndex() {
       return folderIndex;
@@ -1116,16 +1293,25 @@ export async function startWatcher(
     getAliasMap() {
       return aliasMap;
     },
+    mutateFileIndex(event) {
+      updateFileIndex(event, fileIndex);
+      bumpFileIndexGeneration();
+    },
     pruneFileIndexNowExcluded() {
       if (!contentFilter) return 0;
       let pruned = 0;
       for (const [docName, entry] of fileIndex) {
         const relPath = relative(contentDir, entry.canonicalPath);
-        if (contentFilter.isExcluded(relPath)) {
+        const excluded =
+          entry.kind === 'file'
+            ? contentFilter.isPathIgnored(relPath)
+            : contentFilter.isExcluded(relPath);
+        if (excluded) {
           fileIndex.delete(docName);
           pruned++;
         }
       }
+      if (pruned > 0) bumpFileIndexGeneration();
       return pruned;
     },
     pruneFolderIndexNowExcluded() {
@@ -1139,8 +1325,8 @@ export async function startWatcher(
       }
       return pruned;
     },
-    rescanFromDisk() {
-      return seedLastKnownHashes(
+    async rescanFromDisk() {
+      await seedLastKnownHashes(
         contentDir,
         contentDir,
         contentFilter,
@@ -1148,6 +1334,7 @@ export async function startWatcher(
         folderIndex,
         aliasMap,
       );
+      bumpFileIndexGeneration();
     },
   };
 }

@@ -99,6 +99,12 @@ describe('search MCP tool — registration', () => {
     expect(DESCRIPTION.slice(0, 200)).toContain('grep');
   });
 
+  test('description advertises all-files name coverage + the two-tier grep model (PRD-7117 D17)', () => {
+    expect(DESCRIPTION).toContain('ALL non-ignored files');
+    expect(DESCRIPTION.toLowerCase()).toContain('name/path');
+    expect(DESCRIPTION.toLowerCase()).toContain('in parallel');
+  });
+
   test('inputSchema exposes query, intent, scopes, limit, semantic, cwd', () => {
     const { server, registered } = makeFakeServer();
     register(server, {
@@ -296,6 +302,61 @@ describe('search MCP tool — happy path', () => {
     const text = result.content?.find((c) => c.type === 'text')?.text ?? '';
     expect(text).toContain('Semantic:');
     expect(text).toContain('12/40');
+  });
+
+  test("kind:'file' rows survive into structured results (PRD-7117 all-files MCP)", async () => {
+    mockFetchOk({
+      ok: true,
+      query: 'data',
+      intent: 'full_text',
+      results: [
+        {
+          kind: 'file',
+          path: 'data.csv',
+          title: 'data.csv',
+          score: 200,
+          signals: { lexical: 200, fullText: 0, recency: 0 },
+        },
+      ],
+      elapsedMs: 1,
+    });
+    const { server, registered } = makeFakeServer();
+    register(server, {
+      resolveCwd: async () => '/tmp/proj',
+      config: DEFAULT_CONFIG,
+      serverUrl: 'http://localhost:1234',
+    });
+    const tool = expectOneRegisteredTool(registered);
+    const result = await tool.handler({ query: 'data', cwd: '/tmp/proj' });
+    const structured = result.structuredContent as {
+      resultCount: number;
+      results: Array<{ kind: string; path: string }>;
+    };
+    expect(structured.resultCount).toBe(1);
+    expect(structured.results[0]?.kind).toBe('file');
+    expect(structured.results[0]?.path).toBe('data.csv');
+  });
+
+  test("scopes:['file'] is forwarded to /api/search (Zod accepts 'file')", async () => {
+    const captured: { body?: string } = {};
+    globalThis.fetch = mock(async (_url: string, init?: RequestInit) => {
+      captured.body = String(init?.body);
+      return new Response(JSON.stringify({ ok: true, results: [] }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    }) as unknown as typeof fetch;
+    const { server, registered } = makeFakeServer();
+    register(server, {
+      resolveCwd: async () => '/tmp/proj',
+      config: DEFAULT_CONFIG,
+      serverUrl: 'http://localhost:1234',
+    });
+    const tool = expectOneRegisteredTool(registered);
+    const result = await tool.handler({ query: 'q', scopes: ['file'], cwd: '/tmp/proj' });
+    expect(result.isError ?? false).toBe(false);
+    const body = JSON.parse(String(captured.body)) as Record<string, unknown>;
+    expect(body.scopes).toEqual(['file']);
   });
 
   test('zero results returns "No matches" text + structured.resultCount = 0', async () => {

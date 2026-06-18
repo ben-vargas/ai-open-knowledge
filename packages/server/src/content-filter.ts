@@ -97,6 +97,41 @@ function isAlwaysSkipFile(relativePath: string): boolean {
   return BUILTIN_SKIP_FILES.has(relativePath.slice(relativePath.lastIndexOf('/') + 1));
 }
 
+const SECRET_BEARING_DIRS = new Set(['.ssh', '.aws', '.gnupg', '.kube', '.docker']);
+
+function pathHasSecretBearingDirSegment(relativePath: string): boolean {
+  for (const segment of relativePath.split('/')) {
+    if (SECRET_BEARING_DIRS.has(segment.toLowerCase())) return true;
+  }
+  return false;
+}
+
+const SECRET_CREDENTIAL_BASENAMES = new Set([
+  'credentials',
+  '.netrc',
+  '.npmrc',
+  '.pgpass',
+  '.git-credentials',
+]);
+const SECRET_KEY_SUFFIXES = ['.pem', '.key', '.p12', '.pfx', '.keystore', '.jks', '.ppk'] as const;
+function isSecretBearingFile(relativePath: string): boolean {
+  const lower = relativePath.slice(relativePath.lastIndexOf('/') + 1).toLowerCase();
+  if (lower === '.env' || lower.startsWith('.env.')) return true;
+  if (SECRET_CREDENTIAL_BASENAMES.has(lower)) return true;
+  if (
+    lower.startsWith('id_rsa') ||
+    lower.startsWith('id_ed25519') ||
+    lower.startsWith('id_ecdsa') ||
+    lower.startsWith('id_dsa')
+  ) {
+    return true;
+  }
+  for (const suffix of SECRET_KEY_SUFFIXES) {
+    if (lower.endsWith(suffix)) return true;
+  }
+  return false;
+}
+
 function isSingleDocAncestorDir(relativeDir: string, singleDocRelPath: string): boolean {
   return singleDocRelPath === relativeDir || singleDocRelPath.startsWith(`${relativeDir}/`);
 }
@@ -394,6 +429,9 @@ export function createContentFilter(opts: ContentFilterOptions): ContentFilter {
 
       if (isAlwaysSkipFile(relativePath)) return true;
 
+      if (isSecretBearingFile(relativePath)) return true;
+      if (pathHasSecretBearingDirSegment(relativePath)) return true;
+
       if (singleDocRelPath !== undefined) return relativePath !== singleDocRelPath;
 
       if (opts?.bypassFilters) return false;
@@ -414,6 +452,7 @@ export function createContentFilter(opts: ContentFilterOptions): ContentFilter {
 
     isDirExcluded(relativePath: string, opts?: ContentFilterReadOpts): boolean {
       if (pathHasAlwaysSkipSegment(relativePath)) return true;
+      if (pathHasSecretBearingDirSegment(relativePath)) return true;
       if (singleDocRelPath !== undefined) {
         return !isSingleDocAncestorDir(relativePath, singleDocRelPath);
       }
@@ -432,6 +471,8 @@ export function createContentFilter(opts: ContentFilterOptions): ContentFilter {
       if (isReservedDocName(relativePath)) return true;
       if (pathHasAlwaysSkipSegment(relativePath)) return true;
       if (isAlwaysSkipFile(relativePath)) return true;
+      if (isSecretBearingFile(relativePath)) return true;
+      if (pathHasSecretBearingDirSegment(relativePath)) return true;
       if (opts?.bypassFilters) return false;
       return isRejectedByConfigurableRules(relativePath);
     },
@@ -803,6 +844,8 @@ export async function createContentFilterAsync(opts: ContentFilterOptions): Prom
       if (isReservedDocName(relativePath)) return true;
       if (pathHasAlwaysSkipSegment(relativePath)) return true;
       if (isAlwaysSkipFile(relativePath)) return true;
+      if (isSecretBearingFile(relativePath)) return true;
+      if (pathHasSecretBearingDirSegment(relativePath)) return true;
       if (singleDocRelPath !== undefined) return relativePath !== singleDocRelPath;
       if (opts?.bypassFilters) return false;
       if (isRejectedByConfigurableRules(relativePath)) return true;
@@ -818,6 +861,7 @@ export async function createContentFilterAsync(opts: ContentFilterOptions): Prom
 
     isDirExcluded(relativePath: string, opts?: ContentFilterReadOpts): boolean {
       if (pathHasAlwaysSkipSegment(relativePath)) return true;
+      if (pathHasSecretBearingDirSegment(relativePath)) return true;
       if (singleDocRelPath !== undefined) {
         return !isSingleDocAncestorDir(relativePath, singleDocRelPath);
       }
@@ -836,6 +880,8 @@ export async function createContentFilterAsync(opts: ContentFilterOptions): Prom
       if (isReservedDocName(relativePath)) return true;
       if (pathHasAlwaysSkipSegment(relativePath)) return true;
       if (isAlwaysSkipFile(relativePath)) return true;
+      if (isSecretBearingFile(relativePath)) return true;
+      if (pathHasSecretBearingDirSegment(relativePath)) return true;
       if (opts?.bypassFilters) return false;
       return isRejectedByConfigurableRules(relativePath);
     },

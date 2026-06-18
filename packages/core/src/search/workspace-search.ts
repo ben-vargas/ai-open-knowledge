@@ -1,6 +1,7 @@
 import { type AnyOrama, create, insertMultiple, search } from '@orama/orama';
+import { isHiddenDocName } from '../util/doc-name.ts';
 
-export type WorkspaceSearchKind = 'page' | 'folder';
+export type WorkspaceSearchKind = 'page' | 'folder' | 'file';
 export type WorkspaceSearchIntent = 'omnibar' | 'autocomplete' | 'full_text';
 export type WorkspaceSearchScope = WorkspaceSearchKind | 'content';
 
@@ -91,17 +92,27 @@ export function createWorkspaceSearchDocument(input: {
   title?: string | null;
   content?: string | null;
   modifiedTs?: number | null;
+  aliases?: readonly string[] | null;
 }): WorkspaceSearchDocument {
   const name = workspaceSearchBasename(input.path);
   const title = input.title?.trim() || name;
   const modifiedTs = input.modifiedTs ?? 0;
+  const baseSegments = input.path.split('/').filter(Boolean);
+  const baseSet = new Set(baseSegments);
+  const aliasSegments = [
+    ...new Set(
+      (input.aliases ?? [])
+        .flatMap((alias) => alias.split('/').filter(Boolean))
+        .filter((segment) => !baseSet.has(segment)),
+    ),
+  ];
   return {
     id: `${input.kind}:${input.path}`,
     kind: input.kind,
     path: input.path,
     title,
     name,
-    pathSegments: workspaceSearchPathSegments(input.path),
+    pathSegments: [...baseSegments, ...aliasSegments].join(' '),
     content: input.content ?? '',
     modifiedTs: Number.isFinite(modifiedTs) ? modifiedTs : 0,
   };
@@ -137,8 +148,8 @@ function getWorkspaceSearchIndex(corpus: WorkspaceSearchCorpus): WorkspaceSearch
 
 function defaultScopes(intent: WorkspaceSearchIntent): readonly WorkspaceSearchScope[] {
   if (intent === 'autocomplete') return ['page'];
-  if (intent === 'full_text') return ['page', 'content'];
-  return ['page', 'folder'];
+  if (intent === 'full_text') return ['page', 'content', 'file'];
+  return ['page', 'folder', 'file'];
 }
 
 function scopeAllows(document: WorkspaceSearchDocument, scopes: ReadonlySet<WorkspaceSearchScope>) {
@@ -146,7 +157,7 @@ function scopeAllows(document: WorkspaceSearchDocument, scopes: ReadonlySet<Work
   return document.kind === 'page' && scopes.has('content');
 }
 
-function lexicalScore(document: WorkspaceSearchDocument, query: string): number {
+function lexicalBracket(document: WorkspaceSearchDocument, query: string): number {
   const normalizedQuery = normalize(query);
   if (!normalizedQuery) return 0;
 
@@ -162,6 +173,20 @@ function lexicalScore(document: WorkspaceSearchDocument, query: string): number 
   if (title.includes(normalizedQuery) || name.includes(normalizedQuery)) return 500;
   if (path.includes(normalizedQuery)) return 450;
   return -1;
+}
+
+const HIDDEN_DOC_LEXICAL_PENALTY = 0.5;
+
+function lexicalScore(document: WorkspaceSearchDocument, query: string): number {
+  const bracket = lexicalBracket(document, query);
+  if (bracket <= 0) return bracket;
+  return isHiddenDocName(document.path) ? bracket * HIDDEN_DOC_LEXICAL_PENALTY : bracket;
+}
+
+const FILE_KIND_SCORE_DEMOTION = 60;
+
+function canonicalKindAdjustment(kind: WorkspaceSearchKind): number {
+  return kind === 'file' ? -FILE_KIND_SCORE_DEMOTION : 0;
 }
 
 function recencyScores(documents: readonly WorkspaceSearchDocument[]): Map<string, number> {
@@ -274,7 +299,7 @@ export function searchWorkspaceCorpus(
         const recencyScore = recency.get(document.id) ?? 0;
         return {
           document,
-          score: lexical + fullText * 20 + recencyScore,
+          score: lexical + fullText * 20 + recencyScore + canonicalKindAdjustment(document.kind),
           signals: { lexical, fullText, recency: recencyScore },
         };
       })
@@ -350,7 +375,7 @@ function rankWithVector(args: {
     const qualifies = cosine !== undefined && cosine >= floor;
     return {
       document,
-      score: lexical + fullText * 20 + recencyScore,
+      score: lexical + fullText * 20 + recencyScore + canonicalKindAdjustment(document.kind),
       signals: qualifies
         ? { lexical, fullText, recency: recencyScore, vector: cosine }
         : { lexical, fullText, recency: recencyScore },

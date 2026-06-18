@@ -682,6 +682,9 @@ export function createServer(options: ServerOptions): ServerInstance {
       contentFilter,
       serverInstanceId,
       getFileIndex: () => (watcher ? watcher.getFileIndex() : new Map()),
+      getAllFilesIndex: () => (watcher ? watcher.getAllFilesIndex() : new Map()),
+      getFileIndexGeneration: () => watcher?.getFileIndexGeneration() ?? 0,
+      mutateFileIndex: (event) => watcher?.mutateFileIndex(event),
       getFolderIndex: () => (watcher ? watcher.getFolderIndex() : new Map()),
       getAliasMap: () => (watcher ? watcher.getAliasMap() : new Map()),
       rescanFiles: () => watcher?.rescanFromDisk(),
@@ -829,6 +832,9 @@ export function createServer(options: ServerOptions): ServerInstance {
       case 'asset-delete':
       case 'folder-create':
       case 'folder-delete':
+      case 'file-create':
+      case 'file-update':
+      case 'file-delete':
         return event.relativePath;
       case 'create':
       case 'update':
@@ -1124,6 +1130,12 @@ export function createServer(options: ServerOptions): ServerInstance {
         }
         case 'folder-create':
         case 'folder-delete': {
+          signalChannel('files');
+          break;
+        }
+        case 'file-create':
+        case 'file-update':
+        case 'file-delete': {
           signalChannel('files');
           break;
         }
