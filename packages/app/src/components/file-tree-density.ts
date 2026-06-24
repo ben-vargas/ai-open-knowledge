@@ -63,7 +63,6 @@ export function createFileTreeStyle(resolvedTheme: string | undefined): CSSPrope
     '--trees-selected-fg': 'var(--color-primary)',
     '--truncate-marker-fade-in-duration': '0s', // render ellipsis without delay
     '--trees-file-icon-color-markdown': 'light-dark(var(--color-gray-400), var(--color-gray-500))',
-    '--trees-file-icon-color-image': 'light-dark(var(--color-gray-400), var(--color-gray-500))',
     '--trees-fg-muted': 'light-dark(var(--color-gray-400), var(--color-gray-500))',
     ...FILE_TREE_DENSITY_STYLE,
   } as CSSProperties;
