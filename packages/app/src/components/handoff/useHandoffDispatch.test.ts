@@ -1488,6 +1488,36 @@ describe('composeTerminalLaunchPrompt — docked-terminal bare launch is load + 
     expect(claudeOut).not.toContain(OK_TERMINAL_SURFACE_PREAMBLE);
   });
 
+  test('composer (compose scope) threads the typed instruction — NOT a bare launch', async () => {
+    const { composeTerminalLaunchPrompt, selectScopedPrompt } = await import(
+      './useHandoffDispatch'
+    );
+    const input = {
+      docContext: null,
+      compose: {
+        scope: 'doc' as const,
+        docRelativePath: 'notes/work-log.md',
+        instruction: 'What does this file do?',
+        mentions: [],
+      },
+      projectDir: '/proj',
+      docPath: '/proj/notes/work-log.md',
+    };
+    expect(composeTerminalLaunchPrompt(input, 'claude')).toBe(
+      selectScopedPrompt(input, 'claude-code', false),
+    );
+    expect(composeTerminalLaunchPrompt(input, 'codex')).toBe(
+      selectScopedPrompt(input, 'codex', false),
+    );
+    expect(composeTerminalLaunchPrompt(input, 'cursor')).toBe(
+      selectScopedPrompt(input, 'cursor', false),
+    );
+    const claudeOut = composeTerminalLaunchPrompt(input, 'claude');
+    expect(claudeOut).toContain('What does this file do?');
+    expect(claudeOut).not.toBe(composeTerminalBareLaunchPrompt('notes/work-log.md'));
+    expect(claudeOut).not.toContain(OK_TERMINAL_SURFACE_PREAMBLE);
+  });
+
   test('whitespace-only instruction is treated as a bare launch', async () => {
     const { composeTerminalLaunchPrompt } = await import('./useHandoffDispatch');
     const out = composeTerminalLaunchPrompt(

@@ -417,7 +417,7 @@ export function selectScopedPrompt(
 
 export function composeTerminalLaunchPrompt(input: HandoffDispatchInput, cli: TerminalCli): string {
   const hasInstruction = typeof input.instruction === 'string' && input.instruction.trim() !== '';
-  if (input.createDescription !== undefined || hasInstruction) {
+  if (input.compose !== undefined || input.createDescription !== undefined || hasInstruction) {
     return selectScopedPrompt(input, TERMINAL_CLIS[cli].handoffTarget, false);
   }
   return composeTerminalBareLaunchPrompt(input.docContext?.relativePath ?? null);
