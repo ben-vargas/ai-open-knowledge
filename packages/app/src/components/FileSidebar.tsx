@@ -628,8 +628,13 @@ function FileSidebarInner({ onOpenSearch }: FileSidebarProps) {
                   before the first measurement lands. */}
               <Collapsible defaultOpen className="group/files flex shrink-0 flex-col">
                 {/* SidebarGroup wrapper matches the Skills section so the two
-                    headers + their content share the same gutter alignment. */}
-                <SidebarGroup className="min-h-0">
+                    headers + their content share the same gutter alignment.
+                    `px-0` overrides the base `p-2`'s horizontal inset — the
+                    header's own `px-2` (below) and Pierre's
+                    `--trees-padding-inline-override` (file-tree-density.ts)
+                    already each land at 8px, so stacking the group's own 8px
+                    on top would double it to 16px. */}
+                <SidebarGroup className="min-h-0 px-0">
                   <SidebarGroupLabel asChild className="shrink-0">
                     <CollapsibleTrigger
                       data-sidebar-root-context

@@ -75,7 +75,12 @@ export function SkillsSidebarSection() {
 
   return (
     <Collapsible className="group/skills shrink-0">
-      <SidebarGroup>
+      {/* `px-0` overrides the base `p-2`'s horizontal inset so the "Skills"
+          header lands at the same 8px baseline as the Files section's project
+          header (both rely solely on their own SidebarGroupLabel `px-2`) —
+          see the matching override on the Files SidebarGroup in
+          FileSidebar.tsx. */}
+      <SidebarGroup className="px-0">
         <SidebarGroupLabel asChild>
           <CollapsibleTrigger className="flex w-full items-center gap-1.5">
             <Hexagon className="size-3.5 shrink-0" />
