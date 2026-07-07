@@ -4,6 +4,7 @@ import {
   createWorkspaceSearchDocument,
   ForwardLinksSuccessSchema,
   type HeadingEntry,
+  isHiddenDocName,
   MAX_WORKSPACE_SEARCH_LIMIT,
   PageHeadingsSuccessSchema,
   PagesSuccessSchema,
@@ -381,6 +382,33 @@ export async function fetchPages(): Promise<PageItem[]> {
       return { kind: 'asset', docName: `/${asset.path}`, title };
     });
 
+  // Unreferenced non-markdown files (`kind:'file'`) — every tracked file no
+  // markdown doc has linked yet. They must be suggestible: the `@`/`[[` picker
+  // is how you FIRST reference a file, so gating on already-referenced is
+  // circular and hides a freshly-pasted file until something links it. Server
+  // admission is path-gated (gitignore/okignore + secret-file floor), not
+  // extension-limited, so this is every linkable file — images, GPX, video, CSV,
+  // and also source/config — matching the sidebar's show-all set. Hide exactly
+  // what the sidebar hides by reusing the canonical `isHiddenDocName`
+  // (dot-segment OR HIDDEN_CONFIG_BASENAMES like `opencode.json`), not half of
+  // it. `assets`/`folders` above are intentionally NOT hidden-filtered — a
+  // referenced asset was linked on purpose; folders are pre-pruned server-side.
+  // The server never emits a path as both asset and file, so this can't
+  // duplicate `assets`.
+  const files = docData.documents
+    .filter((entry): entry is { kind: 'file'; path: string } => {
+      return (
+        entry.kind === 'file' &&
+        typeof entry.path === 'string' &&
+        entry.path.length > 0 &&
+        !isHiddenDocName(entry.path)
+      );
+    })
+    .map((file): PageItem => {
+      const title = file.path.split('/').pop() ?? file.path;
+      return { kind: 'asset', docName: `/${file.path}`, title };
+    });
+
   // Folders (`kind:'folder'`) carry no `.md` suffix — their `path` is the
   // workspace-relative folder path the chip serializes to verbatim.
   const folders = docData.documents
@@ -392,7 +420,7 @@ export async function fetchPages(): Promise<PageItem[]> {
       return { kind: 'folder', docName: folder.path, title };
     });
 
-  return [...pages, ...assets, ...folders];
+  return [...pages, ...assets, ...files, ...folders];
 }
 
 export async function fetchHeadings(docName: string): Promise<HeadingEntry[]> {

@@ -356,20 +356,90 @@ describe('fetchPages', () => {
     expect(result).toContainEqual({ kind: 'folder', docName: 'specs', title: 'specs' });
   });
 
-  test('keeps pages, assets, and folders together; drops other kinds', async () => {
+  test('keeps pages, assets, files, and folders together', async () => {
     stubFetch(
       { pages: [pageEntry('notes', 'Notes')] },
       {
         documents: [
           { kind: 'folder', path: 'guides', modified: '2026-06-24T00:00:00.000Z' },
           { kind: 'asset', path: 'img/diagram.png' },
-          { kind: 'file', path: 'ignored.md' },
+          { kind: 'file', path: 'data/track.gpx' },
         ],
       },
     );
 
     const result = await fetchPages();
-    expect(result.map((item) => item.kind)).toEqual(['page', 'asset', 'folder']);
+    // Assert docName order, not kind: referenced assets and unreferenced files
+    // both project to `kind:'asset'`, so a kind-only check wouldn't catch a
+    // spread-order swap between them. Order is pages, assets, files, folders.
+    expect(result.map((item) => item.docName)).toEqual([
+      'notes',
+      '/img/diagram.png',
+      '/data/track.gpx',
+      'guides',
+    ]);
+  });
+
+  test('an unreferenced file is surfaced as a suggestible asset', async () => {
+    stubFetch(
+      { pages: [] },
+      { documents: [{ kind: 'file', path: 'fishing-log/assets/2026-07-06-AM.gpx' }] },
+    );
+
+    const result = await fetchPages();
+    expect(result).toContainEqual({
+      kind: 'asset',
+      docName: '/fishing-log/assets/2026-07-06-AM.gpx',
+      title: '2026-07-06-AM.gpx',
+    });
+  });
+
+  test('hidden files are dropped: dot-segments and HIDDEN_CONFIG_BASENAMES', async () => {
+    stubFetch(
+      { pages: [] },
+      {
+        documents: [
+          { kind: 'file', path: 'assets/.DS_Store' },
+          { kind: 'file', path: '.okignore' },
+          { kind: 'file', path: '.ok/skills/x.md' },
+          { kind: 'file', path: '.vscode/mcp.json' },
+          // Non-dotted but hidden via HIDDEN_CONFIG_BASENAMES (seeded in every
+          // OK workspace) — must be dropped through the shared isHiddenDocName,
+          // not just a dot-segment check, to match what the sidebar hides.
+          { kind: 'file', path: 'opencode.json' },
+        ],
+      },
+    );
+
+    const result = await fetchPages();
+    expect(result).toEqual([]);
+  });
+
+  test('a hidden path is kept as a referenced asset but dropped as an unreferenced file', async () => {
+    stubFetch(
+      { pages: [] },
+      {
+        documents: [
+          { kind: 'asset', path: '.obsidian/linked.png' },
+          { kind: 'file', path: '.obsidian/unlinked.txt' },
+        ],
+      },
+    );
+
+    const result = await fetchPages();
+    // Referenced assets are curated by an explicit link, so they are not
+    // hidden-filtered; only the unreferenced file set mirrors the sidebar's
+    // hidden rules.
+    expect(result).toEqual([
+      { kind: 'asset', docName: '/.obsidian/linked.png', title: 'linked.png' },
+    ]);
+  });
+
+  test('files with an empty path are dropped', async () => {
+    stubFetch({ pages: [] }, { documents: [{ kind: 'file', path: '' }] });
+
+    const result = await fetchPages();
+    expect(result.some((item) => item.kind === 'asset')).toBe(false);
   });
 
   test('folders with an empty path are dropped', async () => {
