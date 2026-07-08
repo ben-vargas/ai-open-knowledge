@@ -109,6 +109,7 @@
     "28B21t": ["Agent Skills"],
     "29VNqC": ["Unknown error"],
     "29XZXN": ["Set git identity"],
+    "2B6eYX": ["What this checkbox changes"],
     "2BBAbc": ["List"],
     "2FYpfJ": ["More"],
     "2GT3Hf": ["Global"],
@@ -456,6 +457,7 @@
       ". Change it in Settings → Sync."
     ],
     "AcK_r0": ["Claude CLI"],
+    "AczYxH": ["Custom open-knowledge entry — not managed by OpenKnowledge"],
     "AdcGcG": ["Applying your change"],
     "AddR83": ["Could not create project. Try again or pick a different location."],
     "AeHuzT": ["# One pattern per line.\n# Examples:\n#   drafts/\n#   *.draft.md\n#   !keep.md"],
@@ -521,6 +523,9 @@
     "CSL0l1": ["Couldn't clear the key — please try again."],
     "CTJLpz": ["\"", ["trimmed"], "\" already exists here"],
     "CU3AiE": ["Switching branches"],
+    "CWzc2T": [
+      "<0>~/.ok/bin</0> and <1>~/.ok/env.sh</1> stay either way — the app always maintains them."
+    ],
     "CXj9C-": ["New property name"],
     "C_WGy8": [
       "This file is too large to open in the built-in text editor (1 MB limit). Use Open file below to open it in another app."
@@ -736,6 +741,7 @@
     "HIb0vl": ["Network error — please try again"],
     "HM56Bx": ["Creating..."],
     "HPTPGr": ["Create a new spec file for my user story"],
+    "HSh8u_": ["Folders"],
     "HXFyWD": ["Split diff"],
     "HdkSiO": ["New file"],
     "HfI1dR": ["I already have it locally →"],
@@ -870,6 +876,7 @@
     "LXdWeS": ["Medium section heading."],
     "LXfNU-": ["Navigation and suggestions"],
     "LYufDw": ["Failed to enable semantic search — ", ["detail"]],
+    "LbmLyU": ["Can't safely edit this tool's config"],
     "Lcehxn": ["Save resolution"],
     "LdABLa": ["Could not open ", ["target"], ". Try opening it manually."],
     "LdKIHS": ["Draft a spec"],
@@ -986,6 +993,7 @@
     "O0Z2Xr": ["Outgoing"],
     "O2UpM1": ["Browse"],
     "O3oNi5": ["Email"],
+    "O4PnDd": ["AI tool management is only available in the OpenKnowledge desktop app."],
     "O6yEPk": ["Create a new OpenKnowledge project in the folder of your choice."],
     "O7_W_a": ["Open with AI"],
     "OD0FCX": ["Hidden “", ["basename"], "”"],
@@ -1017,6 +1025,7 @@
     "On0aF2": ["Website"],
     "Oo_WWc": ["No pages found"],
     "Oos8fo": ["Copy command"],
+    "OplnBG": ["Managing AI tools is unavailable in this build."],
     "OuY8t9": ["Open in current branch"],
     "OvEjsP": ["Copying..."],
     "OxplNM": ["Updated \"", ["0"], "\": added ", ["1"], ", removed ", ["2"]],
@@ -1234,6 +1243,7 @@
     "VBE2dw": [
       "Build and keep track of the world behind your story. A home for your characters, places, factions, and the lore that ties them together, so details stay consistent as you write."
     ],
+    "VIwCaD": ["Entry"],
     "VM7H66": ["This file is binary and can't be shown as text."],
     "VNgKZz": ["Advanced settings"],
     "VU3Nrn": ["Missing"],
@@ -1413,6 +1423,7 @@
     "ZvzbDF": ["Add it directly to this project."],
     "ZxXhLY": ["Hide Files (", ["sidebarShortcut"], ")"],
     "Zz25kq": ["Show Files (", ["sidebarShortcut"], ")"],
+    "_5qBNl": ["AI tools & CLI"],
     "_6FVBz": ["Jump to tab 1-8"],
     "_7UQ7y": ["Whole word"],
     "_8quCH": ["From template"],
@@ -1488,6 +1499,7 @@
     ],
     "b4itZn": ["Working"],
     "b5aNbi": ["The ", ["targetNoun"], " could not be opened — try navigating to it manually."],
+    "bBE5tC": ["Detected on this machine"],
     "bBcFK_": ["Open emoji picker for ", ["keyName"]],
     "bD8I7O": ["Complete"],
     "bGa3Fk": ["Uploading file"],
@@ -1619,6 +1631,7 @@
     "f1XQyZ": ["Move block"],
     "f65AOQ": ["Start from"],
     "f8jU-L": [["0"], "/", ["1"], " — ", ["2"]],
+    "f9lQNJ": ["Adds a managed block to"],
     "fBHvBn": ["There's no project folder for this window, so a terminal can't start here."],
     "fBaTkM": ["Toggle the bottom terminal panel."],
     "fG0X0e": ["Install ", ["brand"], " →"],
@@ -1670,6 +1683,7 @@
     ],
     "gYz2ep": ["Expires in ", ["timeLabel"]],
     "gbHcbI": ["Failed to delete property"],
+    "gfdqcY": ["Couldn't apply the change: ", ["0"]],
     "gfohmY": ["Connect tools"],
     "ggm6JX": [
       "This page doesn't exist yet. Open it to create the page in the editor and collapse the graph."
@@ -1901,6 +1915,9 @@
     "mBltnd": ["Path suggestions"],
     "mGaZwZ": ["See the full install guide"],
     "mHVPm5": ["Reconnect required"],
+    "mLAjyL": [
+      "Give the AI tools you use access to read and update your projects. Checking a box sets it up right away; unchecking removes it."
+    ],
     "mNY1G6": ["Undo all edits"],
     "mPneVR": ["Updated \"", ["display"], "\" to ", ["0"], "."],
     "mPy9lS": [
@@ -1966,6 +1983,7 @@
     "nYeBmY": [["hours"], "h ago"],
     "nbfdhU": ["Integrations"],
     "ndeI89": ["Use Cmd/Ctrl+C to copy the link below, or open OK in the desktop app."],
+    "ndwmea": ["unavailable on this platform"],
     "neRy3o": ["Split list item"],
     "nfoduq": ["create worktree"],
     "nft48x": [
@@ -2388,6 +2406,9 @@
       " type: ",
       ["typeLabel"],
       " (inherited from folder properties; not editable here)"
+    ],
+    "yhdqox": [
+      "Installed — ok is available in external terminals. Unchecking removes it; OpenKnowledge's built-in terminal and AI tools keep working."
     ],
     "yitgD9": ["Failed to load skill targets: ", ["0"]],
     "yjExfe": ["Branch <0>", ["shareBranch"], "</0> is checked out in:"],
